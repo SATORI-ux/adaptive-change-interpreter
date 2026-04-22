@@ -19,6 +19,24 @@ function uniq(items = []) {
   return [...new Set(items.filter(Boolean))];
 }
 
+function isGeneratedOrDerivedPath(filePath = "") {
+  const lower = filePath.toLowerCase();
+  return lower.startsWith("dist/") || lower.startsWith("build/");
+}
+
+function isLocalArtifactPath(filePath = "") {
+  return filePath.toLowerCase().endsWith(".ds_store");
+}
+
+function selectRepresentativeProjectPaths(paths = [], limit = 3) {
+  const preferred = paths.filter((filePath) => {
+    const lower = filePath.toLowerCase();
+    return !isGeneratedOrDerivedPath(lower) && !isLocalArtifactPath(lower);
+  });
+
+  return (preferred.length > 0 ? preferred : paths).slice(0, limit);
+}
+
 function getReadmeSummary(readmeExcerpt = "") {
   const cleaned = readmeExcerpt
     .replace(/\r/g, "")
@@ -76,8 +94,9 @@ function detectSystems(repoData, classifiedTrackedFiles) {
   const systems = [];
 
   if (getCategoryCount(counts, "frontend_app") > 0) {
-    const entryLabel = evidence.frontendEntryFiles?.length
-      ? `A frontend application shell is present, with likely entry files such as ${evidence.frontendEntryFiles.slice(0, 3).join(", ")}.`
+    const entryFiles = selectRepresentativeProjectPaths(evidence.frontendEntryFiles || [], 3);
+    const entryLabel = entryFiles.length > 0
+      ? `A frontend application shell is present, with likely entry files such as ${entryFiles.join(", ")}.`
       : "A frontend application shell is present based on the tracked HTML and JavaScript files.";
     systems.push(entryLabel);
   }
@@ -87,7 +106,7 @@ function detectSystems(repoData, classifiedTrackedFiles) {
   }
 
   if (evidence.backendFiles?.length > 0) {
-    systems.push(`Backend support is present through files such as ${evidence.backendFiles.slice(0, 3).join(", ")}, which means some important behavior likely lives beyond the browser layer.`);
+    systems.push(`Backend support is present through files such as ${selectRepresentativeProjectPaths(evidence.backendFiles, 3).join(", ")}, which means some important behavior likely lives beyond the browser layer.`);
   }
 
   if (evidence.databaseFiles?.length > 0) {
@@ -95,7 +114,7 @@ function detectSystems(repoData, classifiedTrackedFiles) {
   }
 
   if (evidence.serviceWorkerFiles?.length > 0) {
-    systems.push(`Background or notification behavior is present through ${evidence.serviceWorkerFiles.slice(0, 2).join(", ")}, which adds another execution surface beyond the main page lifecycle.`);
+    systems.push(`Background or notification behavior is present through ${selectRepresentativeProjectPaths(evidence.serviceWorkerFiles, 2).join(", ")}, which adds another execution surface beyond the main page lifecycle.`);
   }
 
   const scripts = evidence.packageScripts || {};
@@ -107,6 +126,38 @@ function detectSystems(repoData, classifiedTrackedFiles) {
   return systems;
 }
 
+function inferProjectStage(repoData, classifiedTrackedFiles, riskSignals) {
+  const evidence = repoData.evidence || {};
+  const counts = classifiedTrackedFiles.countsByCategory || {};
+  const hasFrontend = getCategoryCount(counts, "frontend_app") > 0;
+  const hasStyling = getCategoryCount(counts, "styling") > 0;
+  const hasBackend = evidence.backendFiles?.length > 0 || getCategoryCount(counts, "backend") > 0;
+  const hasBackground = evidence.serviceWorkerFiles?.length > 0;
+  const hasPrivateBuild = evidence.privateBuildIndicators?.length > 0;
+
+  if (hasFrontend && hasStyling && hasBackend && (hasBackground || hasPrivateBuild || riskSignals.length >= 3)) {
+    return {
+      label: "stabilize and harden",
+      reasoning:
+        "The project already has enough real feature surface and system boundaries that the highest-leverage work is now clarity, cleanup, and consistency rather than broadening scope."
+    };
+  }
+
+  if (hasFrontend && hasStyling) {
+    return {
+      label: "solidify the current feature surface",
+      reasoning:
+        "The project has a visible product shape, so the next gains likely come from making current flows more durable before adding more breadth."
+    };
+  }
+
+  return {
+    label: "continue controlled exploration",
+    reasoning:
+      "The repo still appears early enough that small, explicit iterations are the safest way to keep momentum without creating confusion."
+  };
+}
+
 function buildProjectSummary(repoData, classifiedTrackedFiles) {
   const counts = classifiedTrackedFiles.countsByCategory || {};
   const topCategories = getTopCategories(counts, 4);
@@ -115,6 +166,7 @@ function buildProjectSummary(repoData, classifiedTrackedFiles) {
     .join(", ");
   const identity = inferProjectIdentity(repoData);
   const systems = detectSystems(repoData, classifiedTrackedFiles);
+  const stage = inferProjectStage(repoData, classifiedTrackedFiles, []);
 
   let summary =
     `${identity.summary} ` +
@@ -137,6 +189,10 @@ function buildProjectSummary(repoData, classifiedTrackedFiles) {
 
   if (boundarySignals.length > 0) {
     summary += ` The main complexity appears to be accumulating at the boundaries between ${boundarySignals.join(", ")}.`;
+  }
+
+  if (stage?.label) {
+    summary += ` The current posture reads more like a "${stage.label}" project than a greenfield experiment.`;
   }
 
   return summary;
@@ -245,7 +301,7 @@ function buildArtifactsAndDrift(repoData, classifiedTrackedFiles, riskSignals) {
       title: "Environment-specific or private-build paths appear to exist",
       impact:
         "Once a repo grows multiple build or deployment paths, drift becomes more likely unless ownership of those differences is made explicit.",
-      evidence: evidence.privateBuildIndicators.slice(0, 10)
+      evidence: selectRepresentativeProjectPaths(evidence.privateBuildIndicators, 10)
     });
   }
 
@@ -279,6 +335,7 @@ function buildArtifactsAndDrift(repoData, classifiedTrackedFiles, riskSignals) {
 function buildImprovementPriorities(repoData, riskSignals, classifiedTrackedFiles) {
   const priorities = [];
   const evidence = repoData.evidence || {};
+  const stage = inferProjectStage(repoData, classifiedTrackedFiles, riskSignals);
 
   const highSeveritySignals = riskSignals.filter((signal) => signal.severity === "high");
   if (highSeveritySignals.length > 0) {
@@ -295,10 +352,14 @@ function buildImprovementPriorities(repoData, riskSignals, classifiedTrackedFile
   if (mediumSeveritySignals.length > 0) {
     priorities.push({
       priority: "medium",
-      title: "Reduce avoidable complexity before adding much more surface area",
+      title: "Reduce avoidable complexity before broadening the project further",
       whyNow:
-        "The medium-severity signals in this pass point more toward drift and weak boundaries than toward one catastrophic flaw, which is exactly the stage where cleanup has high leverage.",
-      actions: uniq(mediumSeveritySignals.flatMap((signal) => signal.whatToVerify || [])).slice(0, 6)
+        `${stage.reasoning} The medium-severity signals in this pass point more toward drift and weak boundaries than toward one catastrophic flaw, which is exactly the stage where cleanup has high leverage.`,
+      actions: uniq([
+        "Remove or explicitly justify tracked generated output and local artifacts.",
+        "Write down the source-of-truth rule for builds, deploys, and editable files.",
+        ...mediumSeveritySignals.flatMap((signal) => signal.whatToVerify || [])
+      ]).slice(0, 6)
     });
   }
 
@@ -349,11 +410,33 @@ function buildImprovementPriorities(repoData, riskSignals, classifiedTrackedFile
   return priorities;
 }
 
-function buildWhatToVerifyNext(riskSignals) {
-  const checks = uniq(riskSignals.flatMap((signal) => signal.whatToVerify || []));
+function buildWhatToVerifyNext(repoData, classifiedTrackedFiles, riskSignals) {
+  const evidence = repoData.evidence || {};
+  const counts = classifiedTrackedFiles.countsByCategory || {};
+  const checks = [];
 
-  if (checks.length > 0) {
-    return checks;
+  if (getCategoryCount(counts, "frontend_app") > 0 && getCategoryCount(counts, "styling") > 0) {
+    checks.push("Review one important user-facing flow end to end and confirm the visual layer still matches the product intent.");
+  }
+
+  if ((evidence.backendFiles?.length > 0 || getCategoryCount(counts, "backend") > 0) &&
+      getCategoryCount(counts, "frontend_app") > 0) {
+    checks.push("Pick one promise the UI makes and verify the backend actually enforces it the way the interface implies.");
+  }
+
+  if (evidence.serviceWorkerFiles?.length > 0) {
+    checks.push("Verify that notification or background-triggered behavior still lands in the correct route and environment.");
+  }
+
+  if (evidence.privateBuildIndicators?.length > 0) {
+    checks.push("List what differs between the default and private/deployment-specific paths so those differences stop living only in code.");
+  }
+
+  const riskChecks = uniq(riskSignals.flatMap((signal) => signal.whatToVerify || [])).slice(0, 4);
+  const merged = uniq([...checks, ...riskChecks]);
+
+  if (merged.length > 0) {
+    return merged;
   }
 
   return [
@@ -445,7 +528,11 @@ export function buildProjectHealthReview(
       riskSignals,
       classifiedTrackedFiles
     ),
-    whatToVerifyNext: buildWhatToVerifyNext(riskSignals),
+    whatToVerifyNext: buildWhatToVerifyNext(
+      repoData,
+      classifiedTrackedFiles,
+      riskSignals
+    ),
     reviewBoundaries: buildReviewBoundaries(),
     confidence: buildConfidence(repoData, riskSignals, classifiedTrackedFiles)
   };

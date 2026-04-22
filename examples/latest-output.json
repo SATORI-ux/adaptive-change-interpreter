@@ -169,7 +169,7 @@
     "mode": "project_health_review",
     "repoPath": "/Users/joeytomasulo/Documents/GitHub/within-reach/within-reach",
     "commitRangeContext": "72c2047..bafb705",
-    "projectOverview": "The README suggests this project is trying to do something specific rather than acting as a generic starter: A private two-person ambient check-in app built for long-distance closeness. Within Reach is a lightweight web experience designed around small gestures: - quick check-ins - short notes - soft ambient messages - a private urgent signal - NFC-triggered entry points for each person The goal is to make connection feel immediate, quiet, and intentional without turning it into a full messaging platform. This repository currently contains 59 tracked file(s), with the strongest visible implementation areas being backend (18), frontend_app (11), database (9), assets (6). The current repo evidence points to these main systems: A frontend application shell is present, with likely entry files such as dist/index.html, index.html, js/app.js. A dedicated visual layer is visible through tracked styling files, which is a good sign that behavior and presentation are not completely collapsed together. Backend support is present through files such as supabase/functions/.DS_Store, supabase/functions/_shared/secret.ts, supabase/functions/_shared/utils.ts, which means some important behavior likely lives beyond the browser layer. Database or persistence concerns are visible through 27 tracked database-oriented file(s), so data-shape assumptions matter alongside UI behavior. Background or notification behavior is present through dist/service-worker.js, public/service-worker.js, which adds another execution surface beyond the main page lifecycle. The build and workflow layer is explicit in package scripts such as dev, build, build:private, preview, which makes environment and deployment ownership easier to inspect. The main complexity appears to be accumulating at the boundaries between frontend behavior versus backend enforcement, page behavior versus background notification logic, source code versus environment-specific build or deploy rules.",
+    "projectOverview": "The README suggests this project is trying to do something specific rather than acting as a generic starter: A private two-person ambient check-in app built for long-distance closeness. Within Reach is a lightweight web experience designed around small gestures: - quick check-ins - short notes - soft ambient messages - a private urgent signal - NFC-triggered entry points for each person The goal is to make connection feel immediate, quiet, and intentional without turning it into a full messaging platform. This repository currently contains 59 tracked file(s), with the strongest visible implementation areas being backend (18), frontend_app (11), database (9), assets (6). The current repo evidence points to these main systems: A frontend application shell is present, with likely entry files such as index.html, js/app.js. A dedicated visual layer is visible through tracked styling files, which is a good sign that behavior and presentation are not completely collapsed together. Backend support is present through files such as supabase/functions/_shared/secret.ts, supabase/functions/_shared/utils.ts, supabase/functions/acknowledge-urgent-signal/index.ts, which means some important behavior likely lives beyond the browser layer. Database or persistence concerns are visible through 27 tracked database-oriented file(s), so data-shape assumptions matter alongside UI behavior. Background or notification behavior is present through public/service-worker.js, service-worker.js, which adds another execution surface beyond the main page lifecycle. The build and workflow layer is explicit in package scripts such as dev, build, build:private, preview, which makes environment and deployment ownership easier to inspect. The main complexity appears to be accumulating at the boundaries between frontend behavior versus backend enforcement, page behavior versus background notification logic, source code versus environment-specific build or deploy rules. The current posture reads more like a \"stabilize and harden\" project than a greenfield experiment.",
     "whatIsWorkingWell": [
       {
         "title": "The repository documents product intent in plain language",
@@ -305,9 +305,11 @@
     "improvementPriorities": [
       {
         "priority": "medium",
-        "title": "Reduce avoidable complexity before adding much more surface area",
-        "whyNow": "The medium-severity signals in this pass point more toward drift and weak boundaries than toward one catastrophic flaw, which is exactly the stage where cleanup has high leverage.",
+        "title": "Reduce avoidable complexity before broadening the project further",
+        "whyNow": "The project already has enough real feature surface and system boundaries that the highest-leverage work is now clarity, cleanup, and consistency rather than broadening scope. The medium-severity signals in this pass point more toward drift and weak boundaries than toward one catastrophic flaw, which is exactly the stage where cleanup has high leverage.",
         "actions": [
+          "Remove or explicitly justify tracked generated output and local artifacts.",
+          "Write down the source-of-truth rule for builds, deploys, and editable files.",
           "Confirm whether these files are currently tracked in Git.",
           "Scan for other local-only artifacts that may have slipped in.",
           "Confirm whether build output should be version-controlled for this project.",
@@ -336,14 +338,14 @@
       }
     ],
     "whatToVerifyNext": [
+      "Review one important user-facing flow end to end and confirm the visual layer still matches the product intent.",
+      "Pick one promise the UI makes and verify the backend actually enforces it the way the interface implies.",
+      "Verify that notification or background-triggered behavior still lands in the correct route and environment.",
+      "List what differs between the default and private/deployment-specific paths so those differences stop living only in code.",
       "Confirm whether these files are currently tracked in Git.",
       "Scan for other local-only artifacts that may have slipped in.",
       "Confirm whether build output should be version-controlled for this project.",
-      "Check whether deployment is meant to build from source or reuse tracked output.",
-      "Check whether notification and routing behavior matches the intended deployment target.",
-      "Confirm service worker logic stays aligned with current app flow.",
-      "Confirm which behavior belongs to public builds versus private builds.",
-      "Check for duplicated logic that may diverge over time."
+      "Check whether deployment is meant to build from source or reuse tracked output."
     ],
     "reviewBoundaries": {
       "included": [
