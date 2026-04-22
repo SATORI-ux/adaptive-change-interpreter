@@ -19,50 +19,50 @@
       {
         "path": "index.html",
         "category": "frontend_app",
-        "priority": 97,
-        "reason": "Representative source file from the selected range. A strong starting point for understanding the main implementation path. Read this at this stage because it clarifies one layer of the feature before you move to the next."
+        "priority": 99,
+        "reason": "Entry document. Best first file for seeing where the changed experience becomes visible. Read this early to see where the changed experience becomes visible to the user."
       },
       {
         "path": "js/app.js",
         "category": "frontend_app",
-        "priority": 97,
-        "reason": "Representative source file from the selected range. A strong starting point for understanding the main implementation path. Read this at this stage because it clarifies one layer of the feature before you move to the next."
+        "priority": 98,
+        "reason": "Entry coordinator. Useful for tracing how the visible experience is wired and coordinated in code. Read this right after the entry document so you can trace how the visible experience gets coordinated in code."
+      },
+      {
+        "path": "kept.html",
+        "category": "frontend_app",
+        "priority": 95,
+        "reason": "Alternate document surface. Useful for seeing how the feature appears in a secondary page or route. Read this after the main entry document so you can compare how an alternate page surface expresses the same feature ideas."
       },
       {
         "path": "js/private-page.js",
         "category": "frontend_app",
-        "priority": 97,
-        "reason": "Representative source file from the selected range. A strong starting point for understanding the main implementation path. Read this at this stage because it clarifies one layer of the feature before you move to the next."
+        "priority": 94,
+        "reason": "Alternate or gated-flow file. Useful for understanding where this feature diverges from the default path. Read this after the main entry path so you can compare the alternate or gated flow against the default experience."
       },
       {
         "path": "js/theme.js",
         "category": "frontend_app",
         "priority": 93,
-        "reason": "Theme or control file. Useful for understanding how the new UI state is represented and applied. Read this at this stage because it clarifies one layer of the feature before you move to the next."
+        "reason": "Theme or control file. Useful for understanding how the new UI state is represented and applied. Read this after the entry flow so you can see how UI state is represented and applied across the feature."
       },
       {
         "path": "README.md",
         "category": "docs",
         "priority": 88,
-        "reason": "Project framing file. Read this first if you want product intent before implementation detail. Read this at this stage because it clarifies one layer of the feature before you move to the next."
+        "reason": "Project framing file. Read this first if you want product intent before implementation detail. Use this step to anchor yourself in the product goal before interpreting implementation choices."
       },
       {
         "path": "js/ui.js",
         "category": "frontend_app",
         "priority": 85,
-        "reason": "Behavior file. Useful for understanding feature logic and user flow. Read this at this stage because it clarifies one layer of the feature before you move to the next."
-      },
-      {
-        "path": "kept.html",
-        "category": "frontend_app",
-        "priority": 85,
-        "reason": "Behavior file. Useful for understanding feature logic and user flow. Read this at this stage because it clarifies one layer of the feature before you move to the next."
+        "reason": "Behavior file. Useful for understanding feature logic and user flow. Read this at this stage because it adds supporting detail without being the best first entry point."
       },
       {
         "path": "styles/main.css",
         "category": "styling",
         "priority": 70,
-        "reason": "Presentation file. Best read after you understand the behavior or structure it supports. Read this at this stage because it clarifies one layer of the feature before you move to the next."
+        "reason": "Presentation file. Best read after you understand the behavior or structure it supports. Save this for later so you can interpret the visual polish in the context of behavior you already understand."
       },
       {
         "path": "dist/index.html",

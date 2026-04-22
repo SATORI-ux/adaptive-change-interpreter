@@ -122,6 +122,68 @@ function getDepthProfile(explanationDepth = "level_1") {
   };
 }
 
+function buildReadingStageReason(file, baseReason, context = {}) {
+  const lower = file.path.toLowerCase();
+
+  if (isGeneratedOrDerivedPath(file.path)) {
+    return baseReason;
+  }
+
+  if (context.readmePath && file.path === context.readmePath) {
+    return `${baseReason} Use this step to anchor yourself in the product goal before interpreting implementation choices.`;
+  }
+
+  if (lower === "index.html" || lower.endsWith("/index.html")) {
+    return `${baseReason} Read this early to see where the changed experience becomes visible to the user.`;
+  }
+
+  if (lower.endsWith(".html")) {
+    return `${baseReason} Read this after the main entry document so you can compare how an alternate page surface expresses the same feature ideas.`;
+  }
+
+  if (context.entryFiles?.includes(file.path) || lower.includes("app.") || lower.includes("/app.")) {
+    return `${baseReason} Read this right after the entry document so you can trace how the visible experience gets coordinated in code.`;
+  }
+
+  if (context.preferredSourcePaths?.has(file.path) && (lower.includes("private") || lower.includes("kept"))) {
+    return `${baseReason} Read this after the main entry path so you can compare the alternate or gated flow against the default experience.`;
+  }
+
+  if (context.preferredSourcePaths?.has(file.path)) {
+    return `${baseReason} Start here to see the primary feature path before branching into supporting files.`;
+  }
+
+  if (context.wantsThemeContext && lower.includes("theme")) {
+    return `${baseReason} Read this after the entry flow so you can see how UI state is represented and applied across the feature.`;
+  }
+
+  if (lower.includes("app.") || lower.includes("/app.")) {
+    return `${baseReason} Read this once you know the entry point so you can trace how the rest of the feature gets coordinated.`;
+  }
+
+  if (file.category === "backend") {
+    return `${baseReason} Read this after the UI layer so you can compare what the interface assumes with what the backend actually enforces.`;
+  }
+
+  if (file.category === "notifications_background") {
+    return `${baseReason} Read this after the main flow so you can check whether off-page behavior still matches the visible experience.`;
+  }
+
+  if (file.category === "styling") {
+    return `${baseReason} Save this for later so you can interpret the visual polish in the context of behavior you already understand.`;
+  }
+
+  if (file.category === "config_build") {
+    return `${baseReason} Read this after the feature files if you need to understand environment or deployment assumptions.`;
+  }
+
+  if (file.category === "docs") {
+    return `${baseReason} Use this to cross-check intent if the code story starts feeling ambiguous.`;
+  }
+
+  return `${baseReason} Read this at this stage because it adds supporting detail without being the best first entry point.`;
+}
+
 function detectIntentSignals(repoData, classifiedChangedFiles) {
   const commitSubjects = getCommitSubjects(repoData.commits);
   const diffSnippets = repoData.evidence?.changedDiffSnippets || [];
@@ -387,6 +449,21 @@ function buildReadingOrder(classifiedChangedFiles, repoData, intentSignals, dept
     if (isGeneratedOrDerivedPath(file.path)) {
       priority = 25;
       reason = "Generated or derived output. Useful only after you understand the source files that produce it.";
+    } else if (lower === "index.html" || lower.endsWith("/index.html")) {
+      priority = 99;
+      reason = "Entry document. Best first file for seeing where the changed experience becomes visible.";
+    } else if (lower.endsWith(".html")) {
+      priority = 95;
+      reason = "Alternate document surface. Useful for seeing how the feature appears in a secondary page or route.";
+    } else if (entryFiles.includes(file.path) || lower.includes("app.") || lower.includes("/app.")) {
+      priority = 98;
+      reason = "Entry coordinator. Useful for tracing how the visible experience is wired and coordinated in code.";
+    } else if (preferredSourcePaths.has(file.path) && (lower.includes("app.") || lower.includes("/app."))) {
+      priority = 96;
+      reason = "Main orchestration file. Useful for tracing how the feature state or flow gets coordinated after entry.";
+    } else if (preferredSourcePaths.has(file.path) && (lower.includes("private") || lower.includes("kept"))) {
+      priority = 94;
+      reason = "Alternate or gated-flow file. Useful for understanding where this feature diverges from the default path.";
     } else if (preferredSourcePaths.has(file.path)) {
       priority = 97;
       reason = "Representative source file from the selected range. A strong starting point for understanding the main implementation path.";
@@ -395,9 +472,6 @@ function buildReadingOrder(classifiedChangedFiles, repoData, intentSignals, dept
       reason = depthProfile.includeReadingOrderStrategy
         ? "Project framing file. Read this first if you want product intent before implementation detail."
         : "Project framing file. Useful for understanding what the change is trying to support before reading implementation details.";
-    } else if (entryFiles.includes(file.path) || lower === "index.html") {
-      priority = 95;
-      reason = "Entrypoint or shell file. Useful for seeing where the changed behavior is exposed or initialized.";
     } else if (wantsThemeContext && lower.includes("theme")) {
       priority = 93;
       reason = "Theme or control file. Useful for understanding how the new UI state is represented and applied.";
@@ -429,7 +503,12 @@ function buildReadingOrder(classifiedChangedFiles, repoData, intentSignals, dept
       category: file.category,
       priority,
       reason: depthProfile.includeReadingOrderStrategy && !isGeneratedOrDerivedPath(file.path)
-        ? `${reason} Read this at this stage because it clarifies one layer of the feature before you move to the next.`
+        ? buildReadingStageReason(file, reason, {
+            entryFiles,
+            preferredSourcePaths,
+            readmePath,
+            wantsThemeContext
+          })
         : reason,
     };
   });
