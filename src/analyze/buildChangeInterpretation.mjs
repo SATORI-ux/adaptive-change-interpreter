@@ -702,12 +702,35 @@ function buildWhatToVerify(
   return checks.slice(0, 8);
 }
 
-function buildCarryForwardLesson(themes, riskSignals = []) {
+function buildCarryForwardLesson(themes, riskSignals = [], intentSignals = [], changedFiles = []) {
   const hasRepoHygiene = riskSignals.some(
     (signal) =>
       signal.category === "repo_hygiene" ||
       signal.category === "security_hygiene"
   );
+  const hasThemeSignal = intentSignals.some(
+    (signal) => signal.id === "dark_mode" || signal.id === "toggle_or_control"
+  );
+  const hasResponsiveSignal = intentSignals.some((signal) => signal.id === "responsive_ui");
+  const hasPrivateSignal = intentSignals.some((signal) => signal.id === "private_flow");
+  const alternateHtml = changedFiles.find((filePath) => {
+    const lower = filePath.toLowerCase();
+    return lower.endsWith(".html") && lower !== "index.html" && !lower.endsWith("/index.html");
+  });
+
+  if (hasThemeSignal && hasResponsiveSignal) {
+    return "A cross-cutting UI feature is easier to trust when you review it in layers: first the visible entry points, then the state or control logic behind it, and finally the responsive and visual polish that makes the feature feel coherent.";
+  }
+
+  if (hasThemeSignal) {
+    return "Theme-oriented features rarely live in one place. The reusable lesson is to review both how the UI state is toggled and how that state is expressed across the interface, because visual consistency problems usually come from the gap between those two layers.";
+  }
+
+  if (hasPrivateSignal || alternateHtml) {
+    return alternateHtml
+      ? `When a feature spans both the default page and an alternate surface like ${alternateHtml}, the most useful habit is to compare them deliberately instead of assuming the secondary path stayed in sync.`
+      : "When a feature spans both the default and a gated path, the most useful habit is to compare those flows directly instead of assuming the alternate path stayed in sync.";
+  }
 
   if (hasRepoHygiene) {
     return "A feature can work and still reveal hygiene gaps. One of the main lessons is to treat repo discipline and implementation quality as part of the feature, not as cleanup for later.";
@@ -820,7 +843,12 @@ export function buildChangeInterpretation(
       readingOrder,
       repoData.changedFiles
     ),
-    carryForwardLesson: buildCarryForwardLesson(themes, riskSignals),
+    carryForwardLesson: buildCarryForwardLesson(
+      themes,
+      riskSignals,
+      intentSignals,
+      repoData.changedFiles
+    ),
     confidence: buildConfidence(repoData, themes)
   };
 }

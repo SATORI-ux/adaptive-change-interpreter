@@ -159,7 +159,7 @@
       "Check whether notification and routing behavior matches the intended deployment target.",
       "Confirm service worker logic stays aligned with current app flow."
     ],
-    "carryForwardLesson": "A feature can work and still reveal hygiene gaps. One of the main lessons is to treat repo discipline and implementation quality as part of the feature, not as cleanup for later.",
+    "carryForwardLesson": "A cross-cutting UI feature is easier to trust when you review it in layers: first the visible entry points, then the state or control logic behind it, and finally the responsive and visual polish that makes the feature feel coherent.",
     "confidence": {
       "level": "medium",
       "reasoning": "This interpretation is grounded in multiple direct signals from the selected range, including commit metadata, changed-file context, and diff shape, but some intent still has to be inferred."
