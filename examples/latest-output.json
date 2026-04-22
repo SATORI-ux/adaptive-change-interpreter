@@ -150,14 +150,14 @@
       }
     ],
     "whatToVerify": [
-      "Confirm whether these files are currently tracked in Git.",
-      "Scan for other local-only artifacts that may have slipped in.",
-      "Confirm whether build output should be version-controlled for this project.",
-      "Check whether deployment is meant to build from source or reuse tracked output.",
+      "Run the changed user flow end to end in the browser.",
+      "Start with index.html and confirm the visible entry experience matches the intended feature story.",
+      "Toggle the theme-related control and confirm the state change is applied consistently across the main UI surfaces.",
+      "Check the updated screens at narrow and wide viewport sizes to confirm the responsive polish holds up under real layout pressure.",
+      "Compare the default page and kept.html to make sure alternate or gated flows still express the feature coherently.",
+      "Confirm the behavior and visual layer still feel aligned, especially around state changes, layout shifts, and affordances.",
       "Check whether notification and routing behavior matches the intended deployment target.",
-      "Confirm service worker logic stays aligned with current app flow.",
-      "Confirm which behavior belongs to public builds versus private builds.",
-      "Check for duplicated logic that may diverge over time."
+      "Confirm service worker logic stays aligned with current app flow."
     ],
     "carryForwardLesson": "A feature can work and still reveal hygiene gaps. One of the main lessons is to treat repo discipline and implementation quality as part of the feature, not as cleanup for later.",
     "confidence": {

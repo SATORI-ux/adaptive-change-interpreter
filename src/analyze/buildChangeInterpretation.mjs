@@ -581,8 +581,112 @@ function buildPatternTrend(themes, riskSignals, intentSignals, depthProfile) {
   return "This looks like a focused incremental change rather than a broad architectural shift.";
 }
 
-function buildWhatToVerify(riskSignals = [], readingOrder = []) {
-  const checks = uniq(riskSignals.flatMap((signal) => signal.whatToVerify || []));
+function buildFeatureSpecificVerification(
+  themes,
+  intentSignals,
+  readingOrder,
+  changedFiles = []
+) {
+  const checks = [];
+  const topPath = readingOrder[0]?.path;
+  const alternateHtml = changedFiles.find((filePath) => {
+    const lower = filePath.toLowerCase();
+    return lower.endsWith(".html") && lower !== "index.html" && !lower.endsWith("/index.html");
+  });
+  const hasThemeSignal = intentSignals.some(
+    (signal) => signal.id === "dark_mode" || signal.id === "toggle_or_control"
+  );
+  const hasResponsiveSignal = intentSignals.some((signal) => signal.id === "responsive_ui");
+  const hasPrivateSignal = intentSignals.some((signal) => signal.id === "private_flow");
+
+  checks.push("Run the changed user flow end to end in the browser.");
+
+  if (topPath) {
+    checks.push(`Start with ${topPath} and confirm the visible entry experience matches the intended feature story.`);
+  }
+
+  if (hasThemeSignal) {
+    checks.push("Toggle the theme-related control and confirm the state change is applied consistently across the main UI surfaces.");
+  }
+
+  if (hasResponsiveSignal) {
+    checks.push("Check the updated screens at narrow and wide viewport sizes to confirm the responsive polish holds up under real layout pressure.");
+  }
+
+  if (hasPrivateSignal || alternateHtml) {
+    checks.push(
+      alternateHtml
+        ? `Compare the default page and ${alternateHtml} to make sure alternate or gated flows still express the feature coherently.`
+        : "Compare the default and alternate/gated flows to make sure the feature behaves consistently where it is supposed to."
+    );
+  }
+
+  if (themes.includes("frontend_behavior") && themes.includes("visual_design")) {
+    checks.push("Confirm the behavior and visual layer still feel aligned, especially around state changes, layout shifts, and affordances.");
+  }
+
+  if (themes.includes("backend_logic") && themes.includes("frontend_behavior")) {
+    checks.push("Trace one important request end to end and confirm the UI promise still matches backend enforcement.");
+  }
+
+  if (themes.includes("notifications_background")) {
+    checks.push("Verify any background or notification-triggered paths still land in the correct route and state.");
+  }
+
+  if (themes.includes("configuration_build")) {
+    checks.push("Check whether the feature still behaves correctly under the intended build or environment configuration.");
+  }
+
+  return checks;
+}
+
+function buildRiskSpecificVerification(riskSignals = []) {
+  const preferredSignals = [
+    "frontend_backend_both_touched",
+    "hardcoded_absolute_urls",
+    "service_worker_present",
+    "private_build_split",
+    "tracked_generated_output",
+    "tracked_local_artifacts",
+    "tracked_env_files",
+    "missing_gitignore"
+  ];
+
+  const orderedSignals = [...riskSignals].sort((a, b) => {
+    const aIndex = preferredSignals.indexOf(a.id);
+    const bIndex = preferredSignals.indexOf(b.id);
+    const normalizedA = aIndex === -1 ? preferredSignals.length : aIndex;
+    const normalizedB = bIndex === -1 ? preferredSignals.length : bIndex;
+
+    if (normalizedA !== normalizedB) {
+      return normalizedA - normalizedB;
+    }
+
+    return 0;
+  });
+
+  return uniq(
+    orderedSignals
+      .flatMap((signal) => signal.whatToVerify || [])
+      .slice(0, 4)
+  );
+}
+
+function buildWhatToVerify(
+  themes,
+  intentSignals = [],
+  riskSignals = [],
+  readingOrder = [],
+  changedFiles = []
+) {
+  const featureChecks = buildFeatureSpecificVerification(
+    themes,
+    intentSignals,
+    readingOrder,
+    changedFiles
+  );
+  const riskChecks = buildRiskSpecificVerification(riskSignals);
+  const checks = uniq([...featureChecks, ...riskChecks]);
 
   if (checks.length === 0) {
     const topPath = readingOrder[0]?.path;
@@ -595,7 +699,7 @@ function buildWhatToVerify(riskSignals = [], readingOrder = []) {
     ];
   }
 
-  return checks;
+  return checks.slice(0, 8);
 }
 
 function buildCarryForwardLesson(themes, riskSignals = []) {
@@ -709,7 +813,13 @@ export function buildChangeInterpretation(
       depthProfile
     ),
     riskSignals,
-    whatToVerify: buildWhatToVerify(riskSignals, readingOrder),
+    whatToVerify: buildWhatToVerify(
+      themes,
+      intentSignals,
+      riskSignals,
+      readingOrder,
+      repoData.changedFiles
+    ),
     carryForwardLesson: buildCarryForwardLesson(themes, riskSignals),
     confidence: buildConfidence(repoData, themes)
   };
