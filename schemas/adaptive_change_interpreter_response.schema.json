@@ -1,0 +1,293 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/schemas/adaptive_change_interpreter_response.schema.json",
+  "title": "Adaptive Change Interpreter Response",
+  "description": "Schema for the adaptive-change-interpreter CLI output.",
+  "oneOf": [
+    { "$ref": "#/definitions/changeInterpretationResponse" },
+    { "$ref": "#/definitions/projectHealthReviewResponse" },
+    { "$ref": "#/definitions/pairedSessionResponse" }
+  ],
+  "definitions": {
+    "confidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "reasoning"],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "reasoning": {
+          "type": "string"
+        }
+      }
+    },
+    "classifiedFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "category", "priority", "reason"],
+      "properties": {
+        "path": { "type": "string" },
+        "category": {
+          "type": "string",
+          "enum": [
+            "frontend_app",
+            "styling",
+            "backend",
+            "database",
+            "notifications_background",
+            "docs",
+            "config_build",
+            "assets",
+            "generated_output",
+            "local_artifact",
+            "other"
+          ]
+        },
+        "priority": { "type": "integer" },
+        "reason": { "type": "string" }
+      }
+    },
+    "riskSignal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "severity",
+        "category",
+        "title",
+        "whyItMatters",
+        "evidence",
+        "whatToVerify",
+        "mitigation"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "severity": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "security_hygiene",
+            "repo_hygiene",
+            "config_drift",
+            "boundary_complexity",
+            "workflow_complexity"
+          ]
+        },
+        "title": { "type": "string" },
+        "whyItMatters": { "type": "string" },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "whatToVerify": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "mitigation": { "type": "string" }
+      }
+    },
+    "strengthItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "whyItMatters"],
+      "properties": {
+        "title": { "type": "string" },
+        "whyItMatters": { "type": "string" }
+      }
+    },
+    "artifactOrDriftItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "impact", "evidence"],
+      "properties": {
+        "title": { "type": "string" },
+        "impact": { "type": "string" },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "improvementPriority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["priority", "title", "whyNow", "actions"],
+      "properties": {
+        "priority": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "title": { "type": "string" },
+        "whyNow": { "type": "string" },
+        "actions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "reviewBoundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["included", "notIncluded"],
+      "properties": {
+        "included": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "notIncluded": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "changeInterpretationResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "repoPath",
+        "commitRange",
+        "explanationDepth",
+        "overview",
+        "whyItMatters",
+        "codeShape",
+        "keyThemes",
+        "readingOrder",
+        "howPiecesConnect",
+        "patternTrend",
+        "riskSignals",
+        "whatToVerify",
+        "carryForwardLesson",
+        "confidence"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "const": "change_interpretation"
+        },
+        "repoPath": { "type": "string" },
+        "commitRange": { "type": "string" },
+        "explanationDepth": { "type": "string" },
+        "overview": { "type": "string" },
+        "whyItMatters": { "type": "string" },
+        "codeShape": { "type": "string" },
+        "keyThemes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "frontend_behavior",
+              "visual_design",
+              "backend_logic",
+              "data_model",
+              "configuration_build",
+              "notifications_background",
+              "documentation"
+            ]
+          }
+        },
+        "readingOrder": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/classifiedFile" }
+        },
+        "howPiecesConnect": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "patternTrend": { "type": "string" },
+        "riskSignals": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/riskSignal" }
+        },
+        "whatToVerify": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "carryForwardLesson": { "type": "string" },
+        "confidence": { "$ref": "#/definitions/confidence" }
+      }
+    },
+    "projectHealthReviewResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "repoPath",
+        "commitRangeContext",
+        "projectOverview",
+        "whatIsWorkingWell",
+        "riskSignals",
+        "artifactsAndDrift",
+        "improvementPriorities",
+        "whatToVerifyNext",
+        "reviewBoundaries",
+        "confidence"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "const": "project_health_review"
+        },
+        "repoPath": { "type": "string" },
+        "commitRangeContext": {
+          "type": ["string", "null"]
+        },
+        "projectOverview": { "type": "string" },
+        "whatIsWorkingWell": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/strengthItem" }
+        },
+        "riskSignals": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/riskSignal" }
+        },
+        "artifactsAndDrift": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/artifactOrDriftItem" }
+        },
+        "improvementPriorities": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/improvementPriority" }
+        },
+        "whatToVerifyNext": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "reviewBoundaries": {
+          "$ref": "#/definitions/reviewBoundaries"
+        },
+        "confidence": { "$ref": "#/definitions/confidence" }
+      }
+    },
+    "pairedSessionResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "repoPath",
+        "commitRange",
+        "changeInterpretation",
+        "projectHealthReview"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "const": "paired_session"
+        },
+        "repoPath": { "type": "string" },
+        "commitRange": { "type": "string" },
+        "changeInterpretation": {
+          "$ref": "#/definitions/changeInterpretationResponse"
+        },
+        "projectHealthReview": {
+          "$ref": "#/definitions/projectHealthReviewResponse"
+        }
+      }
+    }
+  }
+}

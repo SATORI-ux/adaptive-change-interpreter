@@ -4,7 +4,8 @@
   "description": "A local-first CLI for explaining code changes, risks, and project health.",
   "type": "module",
   "scripts": {
-    "start": "node src/index.mjs"
+    "start": "node src/index.mjs",
+    "validate:schema": "node src/validateSchema.mjs"
   },
   "keywords": [],
   "author": "",

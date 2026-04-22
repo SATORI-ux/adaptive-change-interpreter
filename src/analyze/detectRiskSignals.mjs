@@ -27,6 +27,7 @@ function findHardcodedUrls(text = "") {
 
 export function detectRiskSignals(repoData, classifiedChangedFiles, classifiedTrackedFiles) {
   const signals = [];
+  const evidence = repoData.evidence || {};
 
   if (!repoData.gitignore?.exists) {
     signals.push({
@@ -46,7 +47,9 @@ export function detectRiskSignals(repoData, classifiedChangedFiles, classifiedTr
     });
   }
 
-  const localArtifacts = findFilesByCategory(classifiedTrackedFiles, "local_artifact");
+  const localArtifacts = evidence.localArtifactFiles?.length
+    ? evidence.localArtifactFiles
+    : findFilesByCategory(classifiedTrackedFiles, "local_artifact");
   if (localArtifacts.length > 0) {
     signals.push({
       id: "tracked_local_artifacts",
@@ -65,7 +68,9 @@ export function detectRiskSignals(repoData, classifiedChangedFiles, classifiedTr
     });
   }
 
-  const generatedOutput = findFilesByCategory(classifiedTrackedFiles, "generated_output");
+  const generatedOutput = evidence.generatedOutputFiles?.length
+    ? evidence.generatedOutputFiles
+    : findFilesByCategory(classifiedTrackedFiles, "generated_output");
   if (generatedOutput.length > 0) {
     signals.push({
       id: "tracked_generated_output",
@@ -84,7 +89,9 @@ export function detectRiskSignals(repoData, classifiedChangedFiles, classifiedTr
     });
   }
 
-  const envLikeFiles = findEnvLikeTrackedFiles(repoData.trackedFiles);
+  const envLikeFiles = evidence.envLikeTrackedFiles?.length
+    ? evidence.envLikeTrackedFiles
+    : findEnvLikeTrackedFiles(repoData.trackedFiles);
   if (envLikeFiles.length > 0) {
     signals.push({
       id: "tracked_env_files",
@@ -122,7 +129,9 @@ export function detectRiskSignals(repoData, classifiedChangedFiles, classifiedTr
     });
   }
 
-  const serviceWorkerFiles = findFilesByCategory(classifiedTrackedFiles, "notifications_background");
+  const serviceWorkerFiles = evidence.serviceWorkerFiles?.length
+    ? evidence.serviceWorkerFiles
+    : findFilesByCategory(classifiedTrackedFiles, "notifications_background");
   if (serviceWorkerFiles.length > 0) {
     signals.push({
       id: "service_worker_present",
@@ -163,14 +172,16 @@ export function detectRiskSignals(repoData, classifiedChangedFiles, classifiedTr
     });
   }
 
-  const privateBuildIndicators = repoData.trackedFiles.filter((file) => {
-    const lower = file.toLowerCase();
-    return (
-      lower.includes("private") ||
-      lower.includes(".vercel") ||
-      lower === "vercel.json"
-    );
-  });
+  const privateBuildIndicators = evidence.privateBuildIndicators?.length
+    ? evidence.privateBuildIndicators
+    : repoData.trackedFiles.filter((file) => {
+        const lower = file.toLowerCase();
+        return (
+          lower.includes("private") ||
+          lower.includes(".vercel") ||
+          lower === "vercel.json"
+        );
+      });
 
   if (privateBuildIndicators.length > 0) {
     signals.push({

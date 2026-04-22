@@ -15,46 +15,128 @@ function findFilesByCategory(classified, category) {
     .map((file) => file.path) || [];
 }
 
+function uniq(items = []) {
+  return [...new Set(items.filter(Boolean))];
+}
+
+function getReadmeSummary(readmeExcerpt = "") {
+  const cleaned = readmeExcerpt
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith("#"))
+    .join(" ");
+
+  if (!cleaned) {
+    return null;
+  }
+
+  const sentences = cleaned.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const summary = sentences.slice(0, 2).join(" ").trim();
+  return summary || null;
+}
+
+function getScriptNames(packageScripts = {}) {
+  return Object.keys(packageScripts);
+}
+
+function hasScript(packageScripts = {}, prefix) {
+  return getScriptNames(packageScripts).some((name) => name === prefix || name.startsWith(`${prefix}:`));
+}
+
+function inferProjectIdentity(repoData) {
+  const readmeSummary = getReadmeSummary(repoData.evidence?.readme?.excerpt || "");
+
+  if (readmeSummary) {
+    return {
+      summary: `The README suggests this project is trying to do something specific rather than acting as a generic starter: ${readmeSummary}`,
+      source: "readme"
+    };
+  }
+
+  const packageDescription = repoData.packageJson?.description?.trim();
+  if (packageDescription) {
+    return {
+      summary: `The package description suggests the repo has a defined purpose: ${packageDescription}.`,
+      source: "package_json"
+    };
+  }
+
+  return {
+    summary:
+      "The repo does not expose a strong product description in the gathered evidence, so the project purpose still has to be inferred mostly from file structure.",
+    source: "inference"
+  };
+}
+
+function detectSystems(repoData, classifiedTrackedFiles) {
+  const evidence = repoData.evidence || {};
+  const counts = classifiedTrackedFiles.countsByCategory || {};
+  const systems = [];
+
+  if (getCategoryCount(counts, "frontend_app") > 0) {
+    const entryLabel = evidence.frontendEntryFiles?.length
+      ? `A frontend application shell is present, with likely entry files such as ${evidence.frontendEntryFiles.slice(0, 3).join(", ")}.`
+      : "A frontend application shell is present based on the tracked HTML and JavaScript files.";
+    systems.push(entryLabel);
+  }
+
+  if (getCategoryCount(counts, "styling") > 0) {
+    systems.push("A dedicated visual layer is visible through tracked styling files, which is a good sign that behavior and presentation are not completely collapsed together.");
+  }
+
+  if (evidence.backendFiles?.length > 0) {
+    systems.push(`Backend support is present through files such as ${evidence.backendFiles.slice(0, 3).join(", ")}, which means some important behavior likely lives beyond the browser layer.`);
+  }
+
+  if (evidence.databaseFiles?.length > 0) {
+    systems.push(`Database or persistence concerns are visible through ${evidence.databaseFiles.length} tracked database-oriented file(s), so data-shape assumptions matter alongside UI behavior.`);
+  }
+
+  if (evidence.serviceWorkerFiles?.length > 0) {
+    systems.push(`Background or notification behavior is present through ${evidence.serviceWorkerFiles.slice(0, 2).join(", ")}, which adds another execution surface beyond the main page lifecycle.`);
+  }
+
+  const scripts = evidence.packageScripts || {};
+  if (hasScript(scripts, "build") || hasScript(scripts, "dev") || hasScript(scripts, "preview")) {
+    const scriptNames = getScriptNames(scripts).slice(0, 6).join(", ");
+    systems.push(`The build and workflow layer is explicit in package scripts such as ${scriptNames}, which makes environment and deployment ownership easier to inspect.`);
+  }
+
+  return systems;
+}
+
 function buildProjectSummary(repoData, classifiedTrackedFiles) {
   const counts = classifiedTrackedFiles.countsByCategory || {};
   const topCategories = getTopCategories(counts, 4);
-
-  const hasFrontend = getCategoryCount(counts, "frontend_app") > 0;
-  const hasStyling = getCategoryCount(counts, "styling") > 0;
-  const hasBackend = getCategoryCount(counts, "backend") > 0;
-  const hasDatabase = getCategoryCount(counts, "database") > 0;
-  const hasNotifications = getCategoryCount(counts, "notifications_background") > 0;
-  const hasConfig = getCategoryCount(counts, "config_build") > 0;
-
   const categorySummary = topCategories
     .map((entry) => `${entry.category} (${entry.count})`)
     .join(", ");
+  const identity = inferProjectIdentity(repoData);
+  const systems = detectSystems(repoData, classifiedTrackedFiles);
 
   let summary =
-    `This repository currently contains ${repoData.trackedFiles.length} tracked file(s). ` +
-    `The strongest visible implementation areas are: ${categorySummary || "no strong file-category pattern detected yet"}.`;
+    `${identity.summary} ` +
+    `This repository currently contains ${repoData.trackedFiles.length} tracked file(s), with the strongest visible implementation areas being ${categorySummary || "no strong file-category pattern detected yet"}.`;
 
-  if (hasFrontend && hasStyling && hasBackend) {
-    summary +=
-      " The project now spans UI behavior, presentation, and backend logic, which means review value comes from understanding boundaries between layers rather than only isolated files.";
-  } else if (hasFrontend && hasStyling) {
-    summary +=
-      " The project currently reads as a frontend-heavy application with both behavior and presentation surfaces in active use.";
+  if (systems.length > 0) {
+    summary += ` The current repo evidence points to these main systems: ${systems.join(" ")}`;
   }
 
-  if (hasDatabase) {
-    summary +=
-      " Database-related files are also present, which raises the importance of keeping frontend assumptions aligned with backend or data-layer truth.";
+  const boundarySignals = [];
+  if (getCategoryCount(counts, "frontend_app") > 0 && repoData.evidence?.backendFiles?.length > 0) {
+    boundarySignals.push("frontend behavior versus backend enforcement");
+  }
+  if (repoData.evidence?.serviceWorkerFiles?.length > 0) {
+    boundarySignals.push("page behavior versus background notification logic");
+  }
+  if (repoData.evidence?.privateBuildIndicators?.length > 0 || hasScript(repoData.evidence?.packageScripts, "build")) {
+    boundarySignals.push("source code versus environment-specific build or deploy rules");
   }
 
-  if (hasNotifications) {
-    summary +=
-      " Background or notification logic is present, which adds an extra behavior surface that can drift if routes or environments change.";
-  }
-
-  if (hasConfig) {
-    summary +=
-      " Configuration and build files are part of the repo shape, so deployment and environment clarity matter alongside feature work.";
+  if (boundarySignals.length > 0) {
+    summary += ` The main complexity appears to be accumulating at the boundaries between ${boundarySignals.join(", ")}.`;
   }
 
   return summary;
@@ -63,36 +145,51 @@ function buildProjectSummary(repoData, classifiedTrackedFiles) {
 function buildWhatIsWorkingWell(repoData, classifiedTrackedFiles, riskSignals) {
   const counts = classifiedTrackedFiles.countsByCategory || {};
   const strengths = [];
+  const readmeSummary = getReadmeSummary(repoData.evidence?.readme?.excerpt || "");
+  const scripts = repoData.evidence?.packageScripts || {};
 
-  if (repoData.gitignore?.exists) {
+  if (readmeSummary) {
     strengths.push({
-      title: ".gitignore is present",
+      title: "The repository documents product intent in plain language",
       whyItMatters:
-        "This reduces the chance of accidental commits involving local artifacts, generated files, or environment-specific files."
+        "A readable README gives the project a stable source of truth for what it is trying to do, which lowers the chance of feature drift during AI-assisted iteration."
     });
   }
 
   if (repoData.packageJson) {
+    const scriptNames = getScriptNames(scripts);
+    const workflowDescription = scriptNames.length > 0
+      ? ` Scripts such as ${scriptNames.slice(0, 5).join(", ")} make the workflow inspectable.`
+      : "";
+
     strengths.push({
       title: "Project metadata is structured enough to inspect package-level behavior",
       whyItMatters:
-        "A readable package.json makes build and tooling review easier and gives the project a clearer source of truth."
+        `A readable package.json makes build and tooling review easier and gives the project a clearer source of truth.${workflowDescription}`
     });
   }
 
   if (getCategoryCount(counts, "frontend_app") > 0 && getCategoryCount(counts, "styling") > 0) {
     strengths.push({
-      title: "The repo has a visible split between app behavior and styling",
+      title: "The repo shows a visible split between app behavior and presentation",
       whyItMatters:
-        "That is a healthy sign because it usually means presentation and logic are not completely collapsed into one layer."
+        "That separation is a healthy sign because cross-cutting UI changes are easier to reason about when styling and behavior are not fully tangled."
     });
   }
 
-  if (getCategoryCount(counts, "backend") > 0 || getCategoryCount(counts, "database") > 0) {
+  if (repoData.evidence?.backendFiles?.length > 0 || repoData.evidence?.databaseFiles?.length > 0) {
     strengths.push({
-      title: "The project goes beyond a purely static frontend",
+      title: "The project already reflects real system boundaries instead of staying purely cosmetic",
       whyItMatters:
-        "This suggests the app is already structured around real data or workflow behavior, not only visual mockups."
+        "Seeing backend or data-layer structure in the repo means the app is being shaped around actual workflow behavior rather than only mockup-level screens."
+    });
+  }
+
+  if (repoData.gitignore?.exists) {
+    strengths.push({
+      title: ".gitignore is present and reviewable",
+      whyItMatters:
+        "That does not guarantee perfect hygiene, but it gives the project a place where artifact and secret-handling rules can be made explicit."
     });
   }
 
@@ -100,7 +197,7 @@ function buildWhatIsWorkingWell(repoData, classifiedTrackedFiles, riskSignals) {
     strengths.push({
       title: "No major heuristic risk signals were detected in this pass",
       whyItMatters:
-        "That does not prove the project is perfect, but it usually means there are no obvious hygiene or structure warnings from the current rules."
+        "That does not prove the repo is perfect, but it suggests there are no obvious high-signal hygiene or structure warnings from the current rules."
     });
   }
 
@@ -115,26 +212,40 @@ function buildWhatIsWorkingWell(repoData, classifiedTrackedFiles, riskSignals) {
   return strengths;
 }
 
-function buildArtifactsAndDrift(classifiedTrackedFiles, riskSignals) {
+function buildArtifactsAndDrift(repoData, classifiedTrackedFiles, riskSignals) {
+  const evidence = repoData.evidence || {};
   const driftItems = [];
 
-  const localArtifacts = findFilesByCategory(classifiedTrackedFiles, "local_artifact");
+  const localArtifacts = evidence.localArtifactFiles?.length
+    ? evidence.localArtifactFiles
+    : findFilesByCategory(classifiedTrackedFiles, "local_artifact");
   if (localArtifacts.length > 0) {
     driftItems.push({
       title: "Local artifact files are present in tracked files",
       impact:
-        "This suggests some repo hygiene cleanup may have happened later than ideal, or that artifact exclusions are not fully enforced yet.",
+        "This suggests some hygiene rules may have been tightened after work was already in motion, which is common, but it also means residue can stay around unless cleanup is deliberate.",
       evidence: localArtifacts
     });
   }
 
-  const generatedOutput = findFilesByCategory(classifiedTrackedFiles, "generated_output");
+  const generatedOutput = evidence.generatedOutputFiles?.length
+    ? evidence.generatedOutputFiles
+    : findFilesByCategory(classifiedTrackedFiles, "generated_output");
   if (generatedOutput.length > 0) {
     driftItems.push({
       title: "Generated output is present in tracked files",
       impact:
-        "This can blur the project’s source of truth and make debugging or deployment behavior harder to reason about.",
+        "Tracked build artifacts can blur the source of truth by making it harder to tell whether behavior should be edited in source files or regenerated from the build pipeline.",
       evidence: generatedOutput.slice(0, 10)
+    });
+  }
+
+  if (evidence.privateBuildIndicators?.length > 0) {
+    driftItems.push({
+      title: "Environment-specific or private-build paths appear to exist",
+      impact:
+        "Once a repo grows multiple build or deployment paths, drift becomes more likely unless ownership of those differences is made explicit.",
+      evidence: evidence.privateBuildIndicators.slice(0, 10)
     });
   }
 
@@ -146,9 +257,9 @@ function buildArtifactsAndDrift(classifiedTrackedFiles, riskSignals) {
 
   if (workflowSignals.length > 0) {
     driftItems.push({
-      title: "Environment or workflow complexity is beginning to accumulate",
+      title: "Environment and routing assumptions deserve an explicit owner",
       impact:
-        "Multiple build paths, deployment-specific files, or hardcoded destinations can create drift if ownership is not kept explicit.",
+        "The strongest drift risks in this pass come from configuration and workflow boundaries, not from syntax-level code issues.",
       evidence: workflowSignals.map((signal) => signal.title)
     });
   }
@@ -157,7 +268,7 @@ function buildArtifactsAndDrift(classifiedTrackedFiles, riskSignals) {
     driftItems.push({
       title: "No strong artifact or drift signal detected from current heuristics",
       impact:
-        "That is a healthy sign for this pass, though more subtle drift can still exist in runtime behavior or architecture decisions.",
+        "That is a healthy sign for this pass, though more subtle drift can still exist in runtime behavior, documentation accuracy, or environment ownership.",
       evidence: []
     });
   }
@@ -165,8 +276,9 @@ function buildArtifactsAndDrift(classifiedTrackedFiles, riskSignals) {
   return driftItems;
 }
 
-function buildImprovementPriorities(riskSignals, classifiedTrackedFiles) {
+function buildImprovementPriorities(repoData, riskSignals, classifiedTrackedFiles) {
   const priorities = [];
+  const evidence = repoData.evidence || {};
 
   const highSeveritySignals = riskSignals.filter((signal) => signal.severity === "high");
   if (highSeveritySignals.length > 0) {
@@ -174,8 +286,8 @@ function buildImprovementPriorities(riskSignals, classifiedTrackedFiles) {
       priority: "high",
       title: "Resolve the strongest hygiene or exposure risks first",
       whyNow:
-        "High-severity issues tend to undermine trust in the rest of the project and are usually cheaper to handle early.",
-      actions: highSeveritySignals.flatMap((signal) => signal.whatToVerify || []).slice(0, 6)
+        "High-severity issues undermine trust in the rest of the project and are usually cheaper to address before more feature work depends on them.",
+      actions: uniq(highSeveritySignals.flatMap((signal) => signal.whatToVerify || [])).slice(0, 6)
     });
   }
 
@@ -183,26 +295,39 @@ function buildImprovementPriorities(riskSignals, classifiedTrackedFiles) {
   if (mediumSeveritySignals.length > 0) {
     priorities.push({
       priority: "medium",
-      title: "Reduce avoidable project complexity before adding more feature surface",
+      title: "Reduce avoidable complexity before adding much more surface area",
       whyNow:
-        "Medium-severity signals often point to drift, weak boundaries, or confusion that will compound during future work.",
-      actions: mediumSeveritySignals.flatMap((signal) => signal.whatToVerify || []).slice(0, 6)
+        "The medium-severity signals in this pass point more toward drift and weak boundaries than toward one catastrophic flaw, which is exactly the stage where cleanup has high leverage.",
+      actions: uniq(mediumSeveritySignals.flatMap((signal) => signal.whatToVerify || [])).slice(0, 6)
     });
   }
 
   const hasFrontend = getCategoryCount(classifiedTrackedFiles.countsByCategory, "frontend_app") > 0;
-  const hasBackend = getCategoryCount(classifiedTrackedFiles.countsByCategory, "backend") > 0;
-
+  const hasBackend = evidence.backendFiles?.length > 0 || getCategoryCount(classifiedTrackedFiles.countsByCategory, "backend") > 0;
   if (hasFrontend && hasBackend) {
     priorities.push({
       priority: "medium",
-      title: "Review boundary assumptions between frontend and backend layers",
+      title: "Review the assumptions shared across frontend and backend layers",
       whyNow:
-        "As soon as both layers are active, bugs often come from mismatched assumptions instead of syntax mistakes.",
+        "Once both layers are active, a lot of bugs come from mismatched promises and enforcement rules rather than isolated implementation mistakes.",
       actions: [
         "Trace one important user flow end to end.",
         "Check whether backend enforcement matches what the UI appears to promise.",
         "Look for duplicated assumptions across client and server layers."
+      ]
+    });
+  }
+
+  if (evidence.serviceWorkerFiles?.length > 0) {
+    priorities.push({
+      priority: "medium",
+      title: "Make background and routing ownership more explicit",
+      whyNow:
+        "Service worker behavior is easy to forget during normal UI development, so notification targets and route ownership should be treated as first-class design decisions.",
+      actions: [
+        "Document which file owns notification or redirect targets.",
+        "Verify background behavior against the current deployment target.",
+        "Check whether any environment-specific URL should move into config."
       ]
     });
   }
@@ -225,7 +350,7 @@ function buildImprovementPriorities(riskSignals, classifiedTrackedFiles) {
 }
 
 function buildWhatToVerifyNext(riskSignals) {
-  const checks = [...new Set(riskSignals.flatMap((signal) => signal.whatToVerify || []))];
+  const checks = uniq(riskSignals.flatMap((signal) => signal.whatToVerify || []));
 
   if (checks.length > 0) {
     return checks;
@@ -242,8 +367,8 @@ function buildReviewBoundaries() {
   return {
     included: [
       "repo structure and tracked-file shape",
+      "selected repository evidence such as README, scripts, and service worker snippets",
       "heuristic hygiene and drift signals",
-      "basic configuration and artifact review",
       "practical improvement prioritization"
     ],
     notIncluded: [
@@ -256,8 +381,16 @@ function buildReviewBoundaries() {
   };
 }
 
-function buildConfidence(riskSignals, classifiedTrackedFiles) {
+function buildConfidence(repoData, riskSignals, classifiedTrackedFiles) {
   const trackedCount = classifiedTrackedFiles.files?.length || 0;
+  const evidence = repoData.evidence || {};
+  const evidencePoints = [
+    evidence.readme?.exists,
+    Object.keys(evidence.packageScripts || {}).length > 0,
+    evidence.serviceWorkerSnippets?.length > 0,
+    evidence.backendFiles?.length > 0,
+    evidence.databaseFiles?.length > 0
+  ].filter(Boolean).length;
 
   if (trackedCount === 0) {
     return {
@@ -266,10 +399,17 @@ function buildConfidence(riskSignals, classifiedTrackedFiles) {
     };
   }
 
+  if (evidencePoints >= 3) {
+    return {
+      level: "medium",
+      reasoning: "This review is grounded in multiple direct repo signals such as README content, package scripts, and system-specific files, but it is still a heuristic project review rather than a runtime audit."
+    };
+  }
+
   if (riskSignals.length >= 3) {
     return {
       level: "medium",
-      reasoning: "There is enough visible repo evidence to identify meaningful project-health patterns, but this remains a heuristic review rather than a full audit."
+      reasoning: "There is enough visible repo evidence to identify meaningful project-health patterns, but several conclusions still depend on inference from structure rather than runtime proof."
     };
   }
 
@@ -296,15 +436,17 @@ export function buildProjectHealthReview(
     ),
     riskSignals,
     artifactsAndDrift: buildArtifactsAndDrift(
+      repoData,
       classifiedTrackedFiles,
       riskSignals
     ),
     improvementPriorities: buildImprovementPriorities(
+      repoData,
       riskSignals,
       classifiedTrackedFiles
     ),
     whatToVerifyNext: buildWhatToVerifyNext(riskSignals),
     reviewBoundaries: buildReviewBoundaries(),
-    confidence: buildConfidence(riskSignals, classifiedTrackedFiles)
+    confidence: buildConfidence(repoData, riskSignals, classifiedTrackedFiles)
   };
 }

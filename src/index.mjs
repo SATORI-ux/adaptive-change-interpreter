@@ -14,6 +14,11 @@ program
   .option("--from <commit>", "Start commit")
   .option("--to <commit>", "End commit")
   .option(
+    "--depth <depth>",
+    "Explanation depth: level_1 or level_2",
+    "level_1"
+  )
+  .option(
     "--mode <mode>",
     "Analysis mode: change_interpretation, project_health_review, paired_session",
     "change_interpretation"
@@ -38,7 +43,7 @@ try {
     classifiedChangedFiles,
     riskSignals,
     {
-      explanationDepth: "level_1"
+      explanationDepth: options.depth
     }
   );
 

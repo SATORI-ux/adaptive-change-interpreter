@@ -14,6 +14,186 @@ function runGitCommand(repoPath, command) {
   }
 }
 
+function escapeForDoubleQuotes(value = "") {
+  return value.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
+}
+
+function normalizeFilePath(filePath) {
+  return filePath.replaceAll("\\", "/");
+}
+
+function readTextFileIfPresent(absolutePath, maxLength = 4000) {
+  if (!fs.existsSync(absolutePath)) {
+    return null;
+  }
+
+  try {
+    const raw = fs.readFileSync(absolutePath, "utf8");
+    return raw.slice(0, maxLength);
+  } catch {
+    return null;
+  }
+}
+
+function findTrackedFiles(trackedFiles, matcher) {
+  return trackedFiles.filter((filePath) => matcher(normalizeFilePath(filePath)));
+}
+
+function readTrackedFileSnippets(repoPath, trackedFiles, maxLength = 2000) {
+  return trackedFiles
+    .map((filePath) => {
+      const absolutePath = path.join(repoPath, filePath);
+      const excerpt = readTextFileIfPresent(absolutePath, maxLength);
+
+      if (!excerpt) {
+        return null;
+      }
+
+      return {
+        path: filePath,
+        excerpt,
+      };
+    })
+    .filter(Boolean);
+}
+
+function readChangedDiffSnippets(repoPath, commitRange, changedFiles, maxLength = 1600) {
+  if (!commitRange) {
+    return [];
+  }
+
+  return changedFiles
+    .map((filePath) => {
+      try {
+        const diffText = runGitCommand(
+          repoPath,
+          `diff --unified=2 ${commitRange} -- "${escapeForDoubleQuotes(filePath)}"`
+        );
+
+        if (!diffText) {
+          return null;
+        }
+
+        return {
+          path: filePath,
+          excerpt: diffText.slice(0, maxLength),
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function collectRepoEvidence(repoPath, trackedFiles, changedFiles, commitRange, packageJson) {
+  const readmeCandidates = findTrackedFiles(trackedFiles, (filePath) => {
+    const lower = filePath.toLowerCase();
+    return lower === "readme.md" || lower.endsWith("/readme.md");
+  });
+  const readmePath = readmeCandidates[0] || null;
+  const readmeExcerpt = readmePath
+    ? readTextFileIfPresent(path.join(repoPath, readmePath), 4000)
+    : null;
+
+  const serviceWorkerFiles = findTrackedFiles(trackedFiles, (filePath) => {
+    const lower = filePath.toLowerCase();
+    return lower.includes("service-worker") || lower.endsWith("sw.js");
+  });
+
+  const configFiles = findTrackedFiles(trackedFiles, (filePath) => {
+    const lower = filePath.toLowerCase();
+    return (
+      lower === ".gitignore" ||
+      lower === "package.json" ||
+      lower === "package-lock.json" ||
+      lower === "vercel.json" ||
+      lower === "netlify.toml" ||
+      lower.endsWith("vite.config.js") ||
+      lower.endsWith("vite.config.mjs") ||
+      lower.endsWith("vite.config.ts")
+    );
+  });
+
+  const databaseFiles = findTrackedFiles(trackedFiles, (filePath) => {
+    const lower = filePath.toLowerCase();
+    return lower.startsWith("supabase/") || lower.endsWith(".sql");
+  });
+
+  const backendFiles = findTrackedFiles(trackedFiles, (filePath) => {
+    const lower = filePath.toLowerCase();
+    return (
+      lower.startsWith("supabase/functions/") ||
+      lower.startsWith("api/") ||
+      lower.startsWith("server/")
+    );
+  });
+
+  const frontendEntryFiles = findTrackedFiles(trackedFiles, (filePath) => {
+    const lower = filePath.toLowerCase();
+    return (
+      lower === "index.html" ||
+      lower.endsWith("/index.html") ||
+      lower.endsWith("/main.js") ||
+      lower.endsWith("/main.ts") ||
+      lower.endsWith("/app.js") ||
+      lower.endsWith("/app.mjs") ||
+      lower.endsWith("/app.ts") ||
+      lower.endsWith("/app.jsx") ||
+      lower.endsWith("/app.tsx")
+    );
+  });
+
+  const generatedOutputFiles = findTrackedFiles(trackedFiles, (filePath) => {
+    const lower = filePath.toLowerCase();
+    return lower.startsWith("dist/") || lower.startsWith("build/");
+  });
+
+  const envLikeTrackedFiles = findTrackedFiles(trackedFiles, (filePath) => {
+    const lower = filePath.toLowerCase();
+    return (
+      lower === ".env" ||
+      lower.startsWith(".env.") ||
+      lower.includes("/.env") ||
+      lower.endsWith(".env")
+    );
+  });
+
+  const localArtifactFiles = findTrackedFiles(trackedFiles, (filePath) => {
+    const lower = filePath.toLowerCase();
+    return lower.endsWith(".ds_store");
+  });
+
+  const privateBuildIndicators = findTrackedFiles(trackedFiles, (filePath) => {
+    const lower = filePath.toLowerCase();
+    return (
+      lower.includes("private") ||
+      lower.includes(".vercel") ||
+      lower === "vercel.json"
+    );
+  });
+
+  return {
+    readme: {
+      exists: Boolean(readmePath),
+      path: readmePath,
+      excerpt: readmeExcerpt,
+    },
+    packageScripts: packageJson?.scripts || {},
+    configFiles,
+    serviceWorkerFiles,
+    serviceWorkerSnippets: readTrackedFileSnippets(repoPath, serviceWorkerFiles, 2000),
+    databaseFiles,
+    backendFiles,
+    frontendEntryFiles,
+    generatedOutputFiles,
+    envLikeTrackedFiles,
+    localArtifactFiles,
+    privateBuildIndicators,
+    changedFileSnippets: readTrackedFileSnippets(repoPath, changedFiles, 1200),
+    changedDiffSnippets: readChangedDiffSnippets(repoPath, commitRange, changedFiles, 1600),
+  };
+}
+
 export function collectRepoData({ repo, from, to, mode }) {
   if (!repo) {
     throw new Error('Missing required "--repo" argument.');
@@ -57,6 +237,7 @@ export function collectRepoData({ repo, from, to, mode }) {
     : "";
 
   const trackedFilesRaw = runGitCommand(absoluteRepoPath, "ls-files");
+  const trackedFiles = trackedFilesRaw ? trackedFilesRaw.split("\n").filter(Boolean) : [];
 
   const rootFiles = fs.readdirSync(absoluteRepoPath);
 
@@ -83,17 +264,24 @@ export function collectRepoData({ repo, from, to, mode }) {
     repoPath: absoluteRepoPath,
     mode,
     commitRange,
-    commits: commitsRaw ? commitsRaw.split("\n") : [],
-    changedFiles: changedFilesRaw ? changedFilesRaw.split("\n") : [],
+    commits: commitsRaw ? commitsRaw.split("\n").filter(Boolean) : [],
+    changedFiles: changedFilesRaw ? changedFilesRaw.split("\n").filter(Boolean) : [],
     diffStat: diffStatRaw,
     rawDiff,
-    trackedFiles: trackedFilesRaw ? trackedFilesRaw.split("\n") : [],
+    trackedFiles,
     rootFiles,
     gitignore: {
       exists: gitignoreExists,
       content: gitignoreContent,
     },
     packageJson,
+    evidence: collectRepoEvidence(
+      absoluteRepoPath,
+      trackedFiles,
+      changedFilesRaw ? changedFilesRaw.split("\n").filter(Boolean) : [],
+      commitRange,
+      packageJson
+    ),
     collectedAt: new Date().toISOString(),
   };
 }
