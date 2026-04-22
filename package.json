@@ -1,0 +1,16 @@
+{
+  "name": "adaptive-change-interpreter",
+  "version": "1.0.0",
+  "description": "A local-first CLI for explaining code changes, risks, and project health.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "commander": "^12.1.0"
+  }
+}
