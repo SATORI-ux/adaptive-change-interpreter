@@ -40,6 +40,22 @@ function looksLikeFrontendAppPath(normalized, ext) {
   );
 }
 
+function looksLikeAnalysisEnginePath(normalized, ext) {
+  if (![".js", ".mjs", ".ts", ".jsx", ".tsx"].includes(ext)) {
+    return false;
+  }
+
+  return (
+    normalized.startsWith("src/analyze/") ||
+    normalized.startsWith("src/git/") ||
+    normalized === "src/index.mjs" ||
+    normalized === "src/validateschema.mjs" ||
+    hasPathToken(normalized, "interpret") ||
+    hasPathToken(normalized, "analyze") ||
+    hasPathToken(normalized, "schema")
+  );
+}
+
 function getFileCategory(filePath) {
   const normalized = filePath.replaceAll("\\", "/");
   const ext = path.extname(normalized).toLowerCase();
@@ -87,6 +103,12 @@ function getFileCategory(filePath) {
     looksLikeFrontendAppPath(normalized, ext)
   ) {
     return "frontend_app";
+  }
+
+  if (
+    looksLikeAnalysisEnginePath(normalized.toLowerCase(), ext)
+  ) {
+    return "analysis_engine";
   }
 
   if (

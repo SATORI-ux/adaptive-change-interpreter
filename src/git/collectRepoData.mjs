@@ -95,6 +95,24 @@ function collectRepoEvidence(repoPath, trackedFiles, changedFiles, commitRange, 
     ? readTextFileIfPresent(path.join(repoPath, readmePath), 4000)
     : null;
 
+  const sourceOfTruthDocFiles = findTrackedFiles(trackedFiles, (filePath) => {
+    const lower = filePath.toLowerCase();
+    return (
+      lower === "readme.md" ||
+      lower === "agents.md" ||
+      lower === "docs/product-brief.md" ||
+      lower === "docs/output-spec.md" ||
+      lower === "docs/health-review.md" ||
+      lower === "docs/failure-pass.md"
+    );
+  });
+
+  const sourceOfTruthDocSnippets = readTrackedFileSnippets(
+    repoPath,
+    sourceOfTruthDocFiles,
+    2000
+  );
+
   const serviceWorkerFiles = findTrackedFiles(trackedFiles, (filePath) => {
     const lower = filePath.toLowerCase();
     return lower.includes("service-worker") || lower.endsWith("sw.js");
@@ -143,6 +161,24 @@ function collectRepoEvidence(repoPath, trackedFiles, changedFiles, commitRange, 
     );
   });
 
+  const analysisEngineFiles = findTrackedFiles(trackedFiles, (filePath) => {
+    const lower = filePath.toLowerCase();
+    return (
+      lower.startsWith("src/analyze/") ||
+      lower.startsWith("src/git/") ||
+      lower === "src/index.mjs" ||
+      lower === "src/validateschema.mjs"
+    );
+  });
+
+  const pipelineSupportFiles = findTrackedFiles(trackedFiles, (filePath) => {
+    const lower = filePath.toLowerCase();
+    return (
+      lower.startsWith("schemas/") ||
+      lower.startsWith("examples/")
+    );
+  });
+
   const generatedOutputFiles = findTrackedFiles(trackedFiles, (filePath) => {
     const lower = filePath.toLowerCase();
     return lower.startsWith("dist/") || lower.startsWith("build/");
@@ -178,6 +214,8 @@ function collectRepoEvidence(repoPath, trackedFiles, changedFiles, commitRange, 
       path: readmePath,
       excerpt: readmeExcerpt,
     },
+    sourceOfTruthDocFiles,
+    sourceOfTruthDocSnippets,
     packageScripts: packageJson?.scripts || {},
     configFiles,
     serviceWorkerFiles,
@@ -185,6 +223,8 @@ function collectRepoEvidence(repoPath, trackedFiles, changedFiles, commitRange, 
     databaseFiles,
     backendFiles,
     frontendEntryFiles,
+    analysisEngineFiles,
+    pipelineSupportFiles,
     generatedOutputFiles,
     envLikeTrackedFiles,
     localArtifactFiles,

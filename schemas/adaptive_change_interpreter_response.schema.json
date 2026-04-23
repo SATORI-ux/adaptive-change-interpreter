@@ -37,6 +37,7 @@
             "backend",
             "database",
             "notifications_background",
+            "analysis_engine",
             "docs",
             "config_build",
             "assets",

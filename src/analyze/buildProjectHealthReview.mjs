@@ -77,8 +77,25 @@ function hasFrontendApplicationSurface(repoData) {
   });
 }
 
+function hasAnalysisEngineSurface(repoData, classifiedTrackedFiles) {
+  const evidence = repoData.evidence || {};
+  return (
+    (evidence.analysisEngineFiles?.length || 0) > 0 ||
+    getCategoryCount(classifiedTrackedFiles.countsByCategory, "analysis_engine") > 0
+  );
+}
+
 function inferProjectIdentity(repoData) {
   const readmeSummary = getReadmeSummary(repoData.evidence?.readme?.excerpt || "");
+  const sourceOfTruthDocs = repoData.evidence?.sourceOfTruthDocFiles || [];
+
+  if (sourceOfTruthDocs.length >= 3) {
+    return {
+      summary:
+        `The repository carries explicit product and review guidance in source-controlled docs such as ${selectRepresentativeProjectPaths(sourceOfTruthDocs, 3).join(", ")}, which suggests the project is trying to encode judgment standards directly into the repo.`,
+      source: "source_of_truth_docs"
+    };
+  }
 
   if (readmeSummary) {
     return {
@@ -107,6 +124,7 @@ function detectSystems(repoData, classifiedTrackedFiles) {
   const counts = classifiedTrackedFiles.countsByCategory || {};
   const systems = [];
   const hasFrontendSurface = hasFrontendApplicationSurface(repoData);
+  const hasAnalysisEngine = hasAnalysisEngineSurface(repoData, classifiedTrackedFiles);
 
   if (hasFrontendSurface) {
     const entryFiles = selectRepresentativeProjectPaths(evidence.frontendEntryFiles || [], 3);
@@ -118,6 +136,12 @@ function detectSystems(repoData, classifiedTrackedFiles) {
 
   if (getCategoryCount(counts, "styling") > 0) {
     systems.push("A dedicated visual layer is visible through tracked styling files, which is a good sign that behavior and presentation are not completely collapsed together.");
+  }
+
+  if (hasAnalysisEngine) {
+    systems.push(
+      `An interpretation pipeline is present through files such as ${selectRepresentativeProjectPaths(evidence.analysisEngineFiles || findFilesByCategory(classifiedTrackedFiles, "analysis_engine"), 4).join(", ")}, which suggests the repository's main product behavior lives in analysis and explanation logic rather than a user-facing app shell.`
+    );
   }
 
   if (evidence.backendFiles?.length > 0) {
@@ -138,6 +162,18 @@ function detectSystems(repoData, classifiedTrackedFiles) {
     systems.push(`The build and workflow layer is explicit in package scripts such as ${scriptNames}, which makes environment and deployment ownership easier to inspect.`);
   }
 
+  if (evidence.sourceOfTruthDocFiles?.length > 0) {
+    systems.push(
+      `Docs-as-source-of-truth are visible through files such as ${selectRepresentativeProjectPaths(evidence.sourceOfTruthDocFiles, 4).join(", ")}, which means product intent and evaluation criteria are part of the system, not just side documentation.`
+    );
+  }
+
+  if (evidence.pipelineSupportFiles?.length > 0) {
+    systems.push(
+      `Validation and fixture artifacts such as ${selectRepresentativeProjectPaths(evidence.pipelineSupportFiles, 3).join(", ")} indicate the analysis pipeline already has supporting assets around schema and sample output.`
+    );
+  }
+
   return systems;
 }
 
@@ -145,10 +181,19 @@ function inferProjectStage(repoData, classifiedTrackedFiles, riskSignals) {
   const evidence = repoData.evidence || {};
   const counts = classifiedTrackedFiles.countsByCategory || {};
   const hasFrontend = hasFrontendApplicationSurface(repoData);
+  const hasAnalysisEngine = hasAnalysisEngineSurface(repoData, classifiedTrackedFiles);
   const hasStyling = getCategoryCount(counts, "styling") > 0;
   const hasBackend = evidence.backendFiles?.length > 0 || getCategoryCount(counts, "backend") > 0;
   const hasBackground = evidence.serviceWorkerFiles?.length > 0;
   const hasPrivateBuild = evidence.privateBuildIndicators?.length > 0;
+
+  if (hasAnalysisEngine && (evidence.sourceOfTruthDocFiles?.length || 0) >= 3) {
+    return {
+      label: "tighten evaluator fidelity",
+      reasoning:
+        "The repo already has a clear analysis engine and explicit product guidance, so the highest-leverage work is improving how faithfully the implementation reflects those judgment standards."
+    };
+  }
 
   if (hasFrontend && hasStyling && hasBackend && (hasBackground || hasPrivateBuild || riskSignals.length >= 3)) {
     return {
@@ -194,6 +239,10 @@ function buildProjectSummary(repoData, classifiedTrackedFiles) {
   const boundarySignals = [];
   if (hasFrontendApplicationSurface(repoData) && repoData.evidence?.backendFiles?.length > 0) {
     boundarySignals.push("frontend behavior versus backend enforcement");
+  }
+  if (hasAnalysisEngineSurface(repoData, classifiedTrackedFiles) &&
+      (repoData.evidence?.sourceOfTruthDocFiles?.length || 0) > 0) {
+    boundarySignals.push("documented evaluation intent versus analyzer implementation");
   }
   if (repoData.evidence?.serviceWorkerFiles?.length > 0) {
     boundarySignals.push("page behavior versus background notification logic");
@@ -246,6 +295,23 @@ function buildWhatIsWorkingWell(repoData, classifiedTrackedFiles, riskSignals) {
       title: "The repo shows a visible split between app behavior and presentation",
       whyItMatters:
         "That separation is a healthy sign because cross-cutting UI changes are easier to reason about when styling and behavior are not fully tangled."
+    });
+  }
+
+  if (hasAnalysisEngineSurface(repoData, classifiedTrackedFiles) &&
+      (repoData.evidence?.sourceOfTruthDocFiles?.length || 0) > 0) {
+    strengths.push({
+      title: "The repo treats product guidance as part of the system, not just side notes",
+      whyItMatters:
+        "Keeping output expectations and review standards in tracked docs creates a stronger feedback loop for an interpretation tool, because implementation can be checked against explicit judgment goals."
+    });
+  }
+
+  if (hasAnalysisEngineSurface(repoData, classifiedTrackedFiles)) {
+    strengths.push({
+      title: "Core pipeline logic is grouped in a recognizable analysis layer",
+      whyItMatters:
+        "Having the interpretation engine concentrated under files like src/analyze and src/git makes it easier to improve evaluator behavior without hunting through unrelated app code."
     });
   }
 
@@ -380,6 +446,7 @@ function buildImprovementPriorities(repoData, riskSignals, classifiedTrackedFile
   }
 
   const hasFrontend = hasFrontendApplicationSurface(repoData);
+  const hasAnalysisEngine = hasAnalysisEngineSurface(repoData, classifiedTrackedFiles);
   const hasBackend = evidence.backendFiles?.length > 0 || getCategoryCount(classifiedTrackedFiles.countsByCategory, "backend") > 0;
   if (hasFrontend && hasBackend) {
     priorities.push({
@@ -391,6 +458,20 @@ function buildImprovementPriorities(repoData, riskSignals, classifiedTrackedFile
         "Trace one important user flow end to end.",
         "Check whether backend enforcement matches what the UI appears to promise.",
         "Look for duplicated assumptions across client and server layers."
+      ]
+    });
+  }
+
+  if (hasAnalysisEngine && (evidence.sourceOfTruthDocFiles?.length || 0) > 0) {
+    priorities.push({
+      priority: "high",
+      title: "Align analyzer behavior with the documented explanation contract",
+      whyNow:
+        `${stage.reasoning} Once the repo has both an explicit judgment brief and a recognizable analysis pipeline, the biggest product risk becomes subtle drift between what the docs promise and what the tool actually outputs.`,
+      actions: [
+        "Compare the strongest source-of-truth docs against the current generator behavior.",
+        "Check which important product promises are documented but not enforced in code or tests.",
+        "Tighten evaluation around behavior, code shape, risk, and verification quality."
       ]
     });
   }
@@ -431,6 +512,7 @@ function buildWhatToVerifyNext(repoData, classifiedTrackedFiles, riskSignals) {
   const counts = classifiedTrackedFiles.countsByCategory || {};
   const checks = [];
   const hasFrontendSurface = hasFrontendApplicationSurface(repoData);
+  const hasAnalysisEngine = hasAnalysisEngineSurface(repoData, classifiedTrackedFiles);
 
   if (hasFrontendSurface && getCategoryCount(counts, "styling") > 0) {
     checks.push("Review one important user-facing flow end to end and confirm the visual layer still matches the product intent.");
@@ -447,6 +529,11 @@ function buildWhatToVerifyNext(repoData, classifiedTrackedFiles, riskSignals) {
 
   if (evidence.privateBuildIndicators?.length > 0) {
     checks.push("List what differs between the default and private/deployment-specific paths so those differences stop living only in code.");
+  }
+
+  if (hasAnalysisEngine && (evidence.sourceOfTruthDocFiles?.length || 0) > 0) {
+    checks.push("Compare the documented explanation contract against one real output and note where the analyzer still falls back to generic phrasing or weak prioritization.");
+    checks.push("Inspect the core pipeline files under src/analyze and src/git to confirm the implementation still reflects the guidance encoded in the source-of-truth docs.");
   }
 
   const riskChecks = uniq(riskSignals.flatMap((signal) => signal.whatToVerify || [])).slice(0, 4);
@@ -486,6 +573,8 @@ function buildConfidence(repoData, riskSignals, classifiedTrackedFiles) {
   const evidence = repoData.evidence || {};
   const evidencePoints = [
     evidence.readme?.exists,
+    evidence.sourceOfTruthDocFiles?.length > 0,
+    evidence.analysisEngineFiles?.length > 0,
     Object.keys(evidence.packageScripts || {}).length > 0,
     evidence.serviceWorkerSnippets?.length > 0,
     evidence.backendFiles?.length > 0,
@@ -502,7 +591,7 @@ function buildConfidence(repoData, riskSignals, classifiedTrackedFiles) {
   if (evidencePoints >= 3) {
     return {
       level: "medium",
-      reasoning: "This review is grounded in multiple direct repo signals such as README content, package scripts, and system-specific files, but it is still a heuristic project review rather than a runtime audit."
+      reasoning: "This review is grounded in multiple direct repo signals such as source-of-truth docs, package scripts, and system-specific files, but it is still a heuristic project review rather than a runtime audit."
     };
   }
 
