@@ -1,0 +1,16 @@
+[
+  {
+    "id": "self_repo_project_health_review",
+    "type": "cli_output",
+    "description": "Runs the CLI against this repository in project health review mode.",
+    "args": ["src/index.mjs", "--repo", ".", "--mode", "project_health_review"],
+    "expectedMode": "project_health_review"
+  },
+  {
+    "id": "sample_repo_paired_session_fixture",
+    "type": "saved_output",
+    "description": "Validates the saved paired-session sample output fixture.",
+    "path": "examples/latest-output.json",
+    "expectedMode": "paired_session"
+  }
+]
