@@ -104,6 +104,83 @@ function isGeneratedOrDerivedPath(filePath = "") {
   return lower.startsWith("dist/") || lower.startsWith("build/");
 }
 
+function isImplementationCategory(category = "") {
+  return [
+    "frontend_app",
+    "styling",
+    "backend",
+    "database",
+    "notifications_background"
+  ].includes(category);
+}
+
+function isGenericSourceCodePath(filePath = "") {
+  const lower = filePath.toLowerCase();
+
+  if (!(lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".ts") || lower.endsWith(".jsx") || lower.endsWith(".tsx"))) {
+    return false;
+  }
+
+  return !(
+    lower === "package.json" ||
+    lower === "package-lock.json" ||
+    lower.endsWith(".config.js") ||
+    lower.endsWith(".config.mjs") ||
+    lower.endsWith(".config.ts") ||
+    lower.startsWith("supabase/") ||
+    lower.startsWith("api/") ||
+    lower.startsWith("server/")
+  );
+}
+
+function isImplementationLikeFile(file) {
+  return isImplementationCategory(file.category) || isGenericSourceCodePath(file.path);
+}
+
+function hasPathToken(filePath = "", token = "") {
+  const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[\\/_\\-.])${escapedToken}([\\/_\\-.]|$)`).test(filePath);
+}
+
+function isSignalBearingImplementationFile(file) {
+  const lower = file.path.toLowerCase();
+
+  if (!isImplementationCategory(file.category)) {
+    return false;
+  }
+
+  if (file.category === "styling" ||
+      file.category === "backend" ||
+      file.category === "database" ||
+      file.category === "notifications_background") {
+    return true;
+  }
+
+  return (
+    lower.endsWith(".html") ||
+    lower.startsWith("js/") ||
+    lower.includes("/js/") ||
+    hasPathToken(lower, "theme") ||
+    hasPathToken(lower, "ui") ||
+    lower.includes("/app.") ||
+    lower.includes("/main.") ||
+    hasPathToken(lower, "components") ||
+    hasPathToken(lower, "component") ||
+    hasPathToken(lower, "pages") ||
+    hasPathToken(lower, "page") ||
+    hasPathToken(lower, "screens") ||
+    hasPathToken(lower, "screen") ||
+    hasPathToken(lower, "routes") ||
+    hasPathToken(lower, "route")
+  );
+}
+
+function getSignalBearingImplementationPaths(classifiedChangedFiles) {
+  return (classifiedChangedFiles.files || [])
+    .filter((file) => isSignalBearingImplementationFile(file))
+    .map((file) => file.path);
+}
+
 function getDepthProfile(explanationDepth = "level_1") {
   if (explanationDepth === "level_2") {
     return {
@@ -186,10 +263,18 @@ function buildReadingStageReason(file, baseReason, context = {}) {
 
 function detectIntentSignals(repoData, classifiedChangedFiles) {
   const commitSubjects = getCommitSubjects(repoData.commits);
+  const implementationPaths = new Set(
+    getSignalBearingImplementationPaths(classifiedChangedFiles)
+  );
   const diffSnippets = repoData.evidence?.changedDiffSnippets || [];
-  const changedPaths = repoData.changedFiles || [];
+  const changedPaths = (repoData.changedFiles || []).filter((filePath) =>
+    implementationPaths.has(filePath)
+  );
   const combinedCommitText = commitSubjects.join(" \n ");
-  const combinedDiffText = diffSnippets.map((item) => item.excerpt).join("\n");
+  const combinedDiffText = diffSnippets
+    .filter((item) => implementationPaths.has(item.path))
+    .map((item) => item.excerpt)
+    .join("\n");
   const combinedPathText = changedPaths.join("\n");
   const counts = classifiedChangedFiles.countsByCategory || {};
 
@@ -245,6 +330,12 @@ function detectIntentSignals(repoData, classifiedChangedFiles) {
       const pathScore = countMatches(combinedPathText, signal.patterns);
       let score = commitScore * 3 + diffScore * 2 + pathScore;
 
+      // Commit subjects can describe polish or docs around a feature without
+      // meaning the implementation actually changed in that area.
+      if (diffScore === 0 && pathScore === 0) {
+        score = 0;
+      }
+
       if (signal.id === "responsive_ui" && commitScore > 0 && (counts.styling || 0) > 0) {
         score += 3;
       }
@@ -289,6 +380,9 @@ function detectIntentSignals(repoData, classifiedChangedFiles) {
 function summarizeChangedSurface(classifiedChangedFiles) {
   const counts = classifiedChangedFiles.countsByCategory || {};
   const changedAreas = [];
+  const hasGenericSourceCode = (classifiedChangedFiles.files || []).some(
+    (file) => file.category === "other" && isGenericSourceCodePath(file.path)
+  );
 
   if ((counts.frontend_app || 0) > 0) {
     changedAreas.push("frontend behavior");
@@ -307,6 +401,9 @@ function summarizeChangedSurface(classifiedChangedFiles) {
   }
   if ((counts.config_build || 0) > 0) {
     changedAreas.push("configuration or build wiring");
+  }
+  if (hasGenericSourceCode) {
+    changedAreas.push("implementation logic");
   }
 
   return changedAreas;
@@ -435,7 +532,13 @@ function buildReadingOrder(classifiedChangedFiles, repoData, intentSignals, dept
   const files = classifiedChangedFiles.files || [];
   const entryFiles = repoData.evidence?.frontendEntryFiles || [];
   const readmePath = repoData.evidence?.readme?.path;
-  const preferredSourcePaths = new Set(selectRepresentativePaths(files.map((file) => file.path)));
+  const preferredSourcePaths = new Set(
+    selectRepresentativePaths(
+      files
+        .filter((file) => isImplementationLikeFile(file))
+        .map((file) => file.path)
+    )
+  );
   const wantsThemeContext = intentSignals.some(
     (signal) => signal.id === "dark_mode" || signal.id === "toggle_or_control"
   );
@@ -481,6 +584,9 @@ function buildReadingOrder(classifiedChangedFiles, repoData, intentSignals, dept
     } else if (file.category === "frontend_app") {
       priority = 85;
       reason = "Behavior file. Useful for understanding feature logic and user flow.";
+    } else if (isGenericSourceCodePath(file.path)) {
+      priority = 83;
+      reason = "Implementation file. Useful for understanding the main code path without assuming it belongs to a user-facing frontend surface.";
     } else if (file.category === "backend") {
       priority = 84;
       reason = "Backend file. Useful for understanding enforcement logic, data handling, or cross-layer assumptions.";

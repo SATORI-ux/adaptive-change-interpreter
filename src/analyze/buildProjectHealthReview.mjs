@@ -63,6 +63,20 @@ function hasScript(packageScripts = {}, prefix) {
   return getScriptNames(packageScripts).some((name) => name === prefix || name.startsWith(`${prefix}:`));
 }
 
+function hasFrontendApplicationSurface(repoData) {
+  const trackedFiles = repoData.trackedFiles || [];
+  const entryFiles = repoData.evidence?.frontendEntryFiles || [];
+
+  if (entryFiles.length > 0) {
+    return true;
+  }
+
+  return trackedFiles.some((filePath) => {
+    const lower = filePath.toLowerCase();
+    return lower === "index.html" || lower.endsWith(".html");
+  });
+}
+
 function inferProjectIdentity(repoData) {
   const readmeSummary = getReadmeSummary(repoData.evidence?.readme?.excerpt || "");
 
@@ -92,8 +106,9 @@ function detectSystems(repoData, classifiedTrackedFiles) {
   const evidence = repoData.evidence || {};
   const counts = classifiedTrackedFiles.countsByCategory || {};
   const systems = [];
+  const hasFrontendSurface = hasFrontendApplicationSurface(repoData);
 
-  if (getCategoryCount(counts, "frontend_app") > 0) {
+  if (hasFrontendSurface) {
     const entryFiles = selectRepresentativeProjectPaths(evidence.frontendEntryFiles || [], 3);
     const entryLabel = entryFiles.length > 0
       ? `A frontend application shell is present, with likely entry files such as ${entryFiles.join(", ")}.`
@@ -129,7 +144,7 @@ function detectSystems(repoData, classifiedTrackedFiles) {
 function inferProjectStage(repoData, classifiedTrackedFiles, riskSignals) {
   const evidence = repoData.evidence || {};
   const counts = classifiedTrackedFiles.countsByCategory || {};
-  const hasFrontend = getCategoryCount(counts, "frontend_app") > 0;
+  const hasFrontend = hasFrontendApplicationSurface(repoData);
   const hasStyling = getCategoryCount(counts, "styling") > 0;
   const hasBackend = evidence.backendFiles?.length > 0 || getCategoryCount(counts, "backend") > 0;
   const hasBackground = evidence.serviceWorkerFiles?.length > 0;
@@ -177,7 +192,7 @@ function buildProjectSummary(repoData, classifiedTrackedFiles) {
   }
 
   const boundarySignals = [];
-  if (getCategoryCount(counts, "frontend_app") > 0 && repoData.evidence?.backendFiles?.length > 0) {
+  if (hasFrontendApplicationSurface(repoData) && repoData.evidence?.backendFiles?.length > 0) {
     boundarySignals.push("frontend behavior versus backend enforcement");
   }
   if (repoData.evidence?.serviceWorkerFiles?.length > 0) {
@@ -203,6 +218,7 @@ function buildWhatIsWorkingWell(repoData, classifiedTrackedFiles, riskSignals) {
   const strengths = [];
   const readmeSummary = getReadmeSummary(repoData.evidence?.readme?.excerpt || "");
   const scripts = repoData.evidence?.packageScripts || {};
+  const hasFrontendSurface = hasFrontendApplicationSurface(repoData);
 
   if (readmeSummary) {
     strengths.push({
@@ -225,7 +241,7 @@ function buildWhatIsWorkingWell(repoData, classifiedTrackedFiles, riskSignals) {
     });
   }
 
-  if (getCategoryCount(counts, "frontend_app") > 0 && getCategoryCount(counts, "styling") > 0) {
+  if (hasFrontendSurface && getCategoryCount(counts, "styling") > 0) {
     strengths.push({
       title: "The repo shows a visible split between app behavior and presentation",
       whyItMatters:
@@ -363,7 +379,7 @@ function buildImprovementPriorities(repoData, riskSignals, classifiedTrackedFile
     });
   }
 
-  const hasFrontend = getCategoryCount(classifiedTrackedFiles.countsByCategory, "frontend_app") > 0;
+  const hasFrontend = hasFrontendApplicationSurface(repoData);
   const hasBackend = evidence.backendFiles?.length > 0 || getCategoryCount(classifiedTrackedFiles.countsByCategory, "backend") > 0;
   if (hasFrontend && hasBackend) {
     priorities.push({
@@ -414,13 +430,14 @@ function buildWhatToVerifyNext(repoData, classifiedTrackedFiles, riskSignals) {
   const evidence = repoData.evidence || {};
   const counts = classifiedTrackedFiles.countsByCategory || {};
   const checks = [];
+  const hasFrontendSurface = hasFrontendApplicationSurface(repoData);
 
-  if (getCategoryCount(counts, "frontend_app") > 0 && getCategoryCount(counts, "styling") > 0) {
+  if (hasFrontendSurface && getCategoryCount(counts, "styling") > 0) {
     checks.push("Review one important user-facing flow end to end and confirm the visual layer still matches the product intent.");
   }
 
   if ((evidence.backendFiles?.length > 0 || getCategoryCount(counts, "backend") > 0) &&
-      getCategoryCount(counts, "frontend_app") > 0) {
+      hasFrontendSurface) {
     checks.push("Pick one promise the UI makes and verify the backend actually enforces it the way the interface implies.");
   }
 

@@ -1,5 +1,45 @@
 import path from "node:path";
 
+function hasPathToken(filePath, token) {
+  const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[\\/_\\-.])${escapedToken}([\\/_\\-.]|$)`).test(filePath);
+}
+
+function looksLikeFrontendAppPath(normalized, ext) {
+  if (ext === ".html" || ext === ".css" || ext === ".scss" || ext === ".sass") {
+    return true;
+  }
+
+  if (![".js", ".mjs", ".ts", ".jsx", ".tsx"].includes(ext)) {
+    return false;
+  }
+
+  return (
+    normalized.startsWith("js/") ||
+    normalized.includes("/js/") ||
+    normalized.startsWith("src/components/") ||
+    normalized.includes("/components/") ||
+    normalized.startsWith("src/pages/") ||
+    normalized.includes("/pages/") ||
+    normalized.startsWith("src/routes/") ||
+    normalized.includes("/routes/") ||
+    normalized.startsWith("src/screens/") ||
+    normalized.includes("/screens/") ||
+    hasPathToken(normalized, "ui") ||
+    hasPathToken(normalized, "theme") ||
+    hasPathToken(normalized, "page") ||
+    hasPathToken(normalized, "screen") ||
+    hasPathToken(normalized, "route") ||
+    normalized.endsWith("/main.js") ||
+    normalized.endsWith("/main.ts") ||
+    normalized.endsWith("/app.js") ||
+    normalized.endsWith("/app.mjs") ||
+    normalized.endsWith("/app.ts") ||
+    normalized.endsWith("/app.jsx") ||
+    normalized.endsWith("/app.tsx")
+  );
+}
+
 function getFileCategory(filePath) {
   const normalized = filePath.replaceAll("\\", "/");
   const ext = path.extname(normalized).toLowerCase();
@@ -44,12 +84,7 @@ function getFileCategory(filePath) {
   }
 
   if (
-    ext === ".html" ||
-    ext === ".js" ||
-    ext === ".mjs" ||
-    ext === ".ts" ||
-    ext === ".jsx" ||
-    ext === ".tsx"
+    looksLikeFrontendAppPath(normalized, ext)
   ) {
     return "frontend_app";
   }
