@@ -3,14 +3,14 @@
 ## Project intent
 This repository builds a learning-oriented change interpretation tool.
 
-Its job is to turn confusing code changes into structured explanations of:
+Its purpose is to translate code changes into:
 - what changed
 - why it matters
 - why the code is shaped this way
 - what could go wrong
 - what to verify next
 
-This project is not:
+This is not:
 - a generic code explainer
 - a repo chat agent
 - a full security scanner
@@ -18,189 +18,193 @@ This project is not:
 
 Keep the product focused on interpretation, judgment, and practical guidance.
 
+---
+
 ## Source of truth
-Before changing prompts, output structure, review behavior, or product framing, check relevant markdown documents. Treat them as source of truth for intent, scope, quality bar, and terminology.
+When relevant, consult:
+- `docs/product-brief.md`
+- `docs/output-spec.md`
+- `docs/health-review.md`
+- `docs/failure-pass.md`
 
-Prioritize these when present:
-- product brief
-- output examples
-- review-mode or health-review docs
-- feature notes
-- evaluation notes
+These define product intent, output structure, and review standards.
 
-If code, prompts, and markdown disagree, do not silently choose one. Call out the conflict and resolve it toward the documented product intent unless explicitly told otherwise.
+If code, prompts, and docs conflict:
+- do not silently choose one
+- call out the conflict
+- resolve toward documented intent unless instructed otherwise
+
+---
 
 ## Working style
-- Prefer small, targeted changes over broad rewrites.
-- Preserve the core workflow unless there is a clear product reason to change it.
-- Read nearby files before changing logic that affects prompts, ranking, clustering, or output sections.
-- Explain behavior, code shape, risks, and verification steps.
-- Be direct and precise. Avoid filler, generic praise, and padded explanation.
-- Do not add abstractions just to look sophisticated.
+- Prefer small, targeted changes over broad rewrites
+- Preserve core workflow unless there is a clear product reason to change it
+- Read nearby files before modifying cross-cutting behavior
+- Explain behavior, code shape, risks, and verification steps
+- Be direct and precise; avoid filler or generic phrasing
 
-## Core product behavior
-This tool should prioritize:
+---
+
+## Core behavior
+Prioritize:
 - behavioral change
-- flow change
-- system interaction
-- architectural movement
-- risk and mitigation awareness
-- useful reading order and inspection guidance
+- system flow
+- file relationships
+- code shape
+- risk awareness
 
-Do not default to line-by-line syntax narration unless explicitly requested.
+Do not default to:
+- line-by-line syntax narration
+- shallow summaries that could apply to any diff
 
-Avoid shallow summaries that could apply to any diff.
+---
 
 ## Explanation contract
-A strong output should answer:
+A strong output answers:
 - What changed?
 - Why does it matter?
 - Why was it structured this way?
-- What pattern, shortcut, or trend does it suggest?
-- What might be risky, brittle, or unclear?
-- What should be verified or improved next?
+- What pattern or trend does this suggest?
+- What might be risky or unclear?
+- What should be verified next?
 
-If these questions are not answered, the output is incomplete.
+If these are missing, the output is incomplete.
 
-## Certainty and inference rules
+---
+
+## Certainty rules
 Separate clearly:
-- observed change
-- likely intent
-- uncertain interpretation
+- observed facts
+- inferred intent
+- uncertainty
 
-Do not present inferred intent as fact.
+Do not present inference as fact.
 
-If intent is ambiguous:
-- say so clearly
-- provide likely interpretations
-- avoid confident storytelling not supported by the change
+If intent is unclear:
+- say so
+- offer likely interpretations
+- avoid confident speculation
 
-## Anti-generic output rules
-Do not:
-- narrate trivial syntax
-- summarize each file equally
-- use filler educational language
-- flatten all output to beginner level
-- overuse jargon without translation
-- sound exhaustive at the cost of usefulness
+---
 
-Every explanation should reflect the actual change and file relationships.
+## Change interpretation rules
+- Group changes into meaningful themes
+- Do not treat all files equally
+- Rank importance and suggest reading order
 
-## Change grouping rules
-Group changes into meaningful themes or chapters, such as:
-- authentication flow
+Common themes:
+- auth
 - validation
 - UI behavior
-- state handling
-- data fetching
-- configuration
+- data flow
+- config
 - deployment
-- project structure
+- structure
 
-Do not treat raw changed-file order as importance.
-Rank significance and recommend reading order based on impact.
+---
 
 ## Code shape reasoning
-Explain why the implementation is shaped the way it is.
+Explain why the implementation is structured this way.
 
-Useful categories include:
-- centralization vs duplication
+Focus on:
 - separation of concerns
+- centralization vs duplication
 - coupling between modules
-- local patch vs broader abstraction
-- intentional structure vs likely shortcut
-- future maintainability impact
+- shortcuts vs intentional design
+- maintainability impact
 
-Focus on structure and implications more than syntax.
+---
 
 ## Risk signals
-Flag realistic risks only when there is signal.
+Flag risks only when there is signal.
 
-Common categories:
+Common areas:
 - weak boundaries
 - frontend-only enforcement
 - missing or fragile validation
 - config or environment drift
 - duplicated or scattered logic
 - brittle initialization
-- stale artifacts or ownership confusion
 - security hygiene issues
 
-Always explain why something is risky and what evidence supports the concern.
+Always explain:
+- why it is risky
+- what evidence supports it
 
-Do not use alarmist language when the signal is tentative.
+Avoid alarmist language.
+
+---
 
 ## Verification guidance
-Always provide concrete checks when relevant:
-- what to test
-- what edge cases to try
-- what assumptions to validate
-- what could silently fail
-- what files or layers should be inspected next
+Provide concrete checks:
+- edge cases to test
+- assumptions to validate
+- failure modes to consider
+- files or layers to inspect
 
-Avoid vague advice such as “test thoroughly”.
+Avoid vague advice.
+
+---
 
 ## Depth and adaptation
-Adapt explanation depth to the user’s level.
+Adjust depth to the user:
+- lower level: clarity and flow
+- higher level: architecture and tradeoffs
 
-Lower-depth outputs should:
-- prioritize clarity
-- explain flow and interactions
-- translate jargon only when needed
+Do not default to beginner explanations unless needed.
 
-Higher-depth outputs should:
-- focus on architecture
-- highlight tradeoffs
-- discuss coupling, boundary design, and future impact
+---
 
-Do not default to beginner hand-holding unless appropriate.
+## Review posture
+After meaningful changes:
+- run a failure-oriented analysis
+- look for fragile assumptions, edge cases, and boundary issues
+- consider config drift and environment differences
+- identify what is most likely to break
+
+Prioritize realistic risks over theoretical noise.
+
+---
 
 ## Project Health Review mode
-When running broader analysis, step back from the single diff and assess:
-- what the project appears to do
-- where complexity is accumulating
-- what is working well
-- where drift or weak boundaries are emerging
-- which improvements have the highest leverage
+When reviewing the project broadly:
+- assess structure and system boundaries
+- identify where complexity is accumulating
+- highlight what is working well
+- surface drift and high-leverage improvements
 
-This mode is a judgment-oriented checkpoint, not a full audit, profiler, or vulnerability scanner.
+This is a checkpoint review, not a full audit.
 
-## Failure awareness
-Actively look for:
-- what could break
-- what is assumed but not enforced
-- what may work only in one environment
-- what may silently drift over time
-- what a beginner or AI-assisted builder is least likely to notice
-
-Surface these clearly without overstating confidence.
+---
 
 ## Documentation expectations
-When product behavior or evaluation criteria change meaningfully:
-- update the relevant markdown file if one exists
-- keep docs concise and practical
-- preserve examples that show the intended quality bar
+When behavior or evaluation criteria change:
+- update relevant docs
+- keep documentation concise and practical
+- preserve useful examples
 
-If the same correction is needed more than once, add or refine guidance here.
+If issues repeat, refine guidance here.
+
+---
 
 ## Output expectations
-When reviewing or explaining changes, prioritize:
+Prioritize:
 - behavior
 - why it matters
 - code shape
-- file relationships
+- system relationships
 - risks
 - what to verify next
-- carry-forward lesson
+- carry-forward insight
 
-Avoid line-by-line narration unless explicitly requested.
+Avoid line-by-line narration unless requested.
+
+---
 
 ## Done means
-A task is not done just because text was generated or a prompt was changed.
-
-A task is done when:
-- the output better matches the product’s interpretation goals
-- the change preserves or improves explanation quality
-- likely risks or regressions are considered
-- relevant docs are updated or explicitly noted
-- uncertainty is labeled honestly where needed
+A task is complete when:
+- output aligns with interpretation goals
+- explanation quality is preserved or improved
+- risks and assumptions are surfaced
+- relevant docs are updated or noted
+- uncertainty is clearly labeled
