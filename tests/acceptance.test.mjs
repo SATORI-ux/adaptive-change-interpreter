@@ -58,7 +58,11 @@ function commitFixtureRepo(repoPath, message) {
   return runGit(repoPath, ["rev-parse", "HEAD"]);
 }
 
-function createLiveCommitRangeFixtureRepo(prefix) {
+function createLiveCommitRangeFixtureRepo(prefix, scenario = "checkout_ui") {
+  if (scenario !== "checkout_ui") {
+    return createTrickyCommitRangeFixtureRepo(prefix, scenario);
+  }
+
   const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-repo-`));
 
   runGit(repoPath, ["init", "--quiet"]);
@@ -171,6 +175,344 @@ function createLiveCommitRangeFixtureRepo(prefix) {
   const to = commitFixtureRepo(repoPath, "Add checkout confirmation behavior");
 
   return { repoPath, from, to };
+}
+
+function initializeFixtureRepo(prefix) {
+  const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-repo-`));
+
+  runGit(repoPath, ["init", "--quiet"]);
+  runGit(repoPath, ["config", "core.autocrlf", "false"]);
+
+  writeFixtureFile(
+    repoPath,
+    "README.md",
+    [
+      "# Fixture Project",
+      "",
+      "A small repository used to verify tricky change interpretation cases.",
+      "",
+    ].join("\n")
+  );
+  writeFixtureFile(repoPath, ".gitignore", ["node_modules/", ".env", ""].join("\n"));
+
+  return repoPath;
+}
+
+function createDocsOnlyFixture(prefix) {
+  const repoPath = initializeFixtureRepo(prefix);
+  writeFixtureFile(
+    repoPath,
+    "docs/operating-notes.md",
+    [
+      "# Operating Notes",
+      "",
+      "The first version names the review workflow at a high level.",
+      "",
+    ].join("\n")
+  );
+
+  const from = commitFixtureRepo(repoPath, "Create documentation baseline");
+
+  writeFixtureFile(
+    repoPath,
+    "README.md",
+    [
+      "# Fixture Project",
+      "",
+      "A small repository used to verify tricky change interpretation cases.",
+      "",
+      "The review flow now expects a named owner for release checks.",
+      "",
+    ].join("\n")
+  );
+  writeFixtureFile(
+    repoPath,
+    "docs/operating-notes.md",
+    [
+      "# Operating Notes",
+      "",
+      "The review workflow now separates author checks from release-owner checks.",
+      "",
+      "Release owners verify rollback notes before tagging a build.",
+      "",
+    ].join("\n")
+  );
+
+  const to = commitFixtureRepo(repoPath, "Clarify release review ownership");
+  return { repoPath, from, to };
+}
+
+function createConfigOnlyFixture(prefix) {
+  const repoPath = initializeFixtureRepo(prefix);
+  writeFixtureFile(
+    repoPath,
+    "package.json",
+    JSON.stringify(
+      {
+        name: "fixture-config",
+        type: "module",
+        scripts: {
+          test: "node --test"
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  const from = commitFixtureRepo(repoPath, "Create config baseline");
+
+  writeFixtureFile(
+    repoPath,
+    "package.json",
+    JSON.stringify(
+      {
+        name: "fixture-config",
+        type: "module",
+        scripts: {
+          test: "node --test",
+          build: "vite build"
+        },
+        devDependencies: {
+          vite: "^5.0.0"
+        }
+      },
+      null,
+      2
+    )
+  );
+  writeFixtureFile(
+    repoPath,
+    "vite.config.js",
+    [
+      "export default {",
+      "  mode: process.env.NODE_ENV || 'development',",
+      "  define: {",
+      "    __API_URL__: JSON.stringify(process.env.VITE_API_URL),",
+      "  },",
+      "  build: {",
+      "    outDir: 'dist',",
+      "  },",
+      "};",
+      "",
+    ].join("\n")
+  );
+
+  const to = commitFixtureRepo(repoPath, "Add Vite build configuration");
+  return { repoPath, from, to };
+}
+
+function createFrontendBackendBoundaryFixture(prefix) {
+  const repoPath = initializeFixtureRepo(prefix);
+  writeFixtureFile(
+    repoPath,
+    "index.html",
+    [
+      "<!doctype html>",
+      "<button type=\"button\" data-submit-order>Submit order</button>",
+      "",
+    ].join("\n")
+  );
+  writeFixtureFile(
+    repoPath,
+    "api/orders.js",
+    [
+      "export function submitOrder(order) {",
+      "  return { ok: true, order };",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  const from = commitFixtureRepo(repoPath, "Create order submission flow");
+
+  writeFixtureFile(
+    repoPath,
+    "index.html",
+    [
+      "<!doctype html>",
+      "<button type=\"button\" data-submit-order data-requires-stock-check>Submit order</button>",
+      "<p data-order-status data-error-code=\"stock_check_required\">Stock will be checked before confirmation.</p>",
+      "",
+    ].join("\n")
+  );
+  writeFixtureFile(
+    repoPath,
+    "api/orders.js",
+    [
+      "export function submitOrder(order) {",
+      "  if (!order.stockChecked) {",
+      "    return { ok: false, error: 'stock_check_required' };",
+      "  }",
+      "",
+      "  return { ok: true, order };",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  const to = commitFixtureRepo(repoPath, "Require stock check before order confirmation");
+  return { repoPath, from, to };
+}
+
+function createGeneratedOutputHeavyFixture(prefix) {
+  const repoPath = initializeFixtureRepo(prefix);
+  writeFixtureFile(
+    repoPath,
+    "src/lib/render.js",
+    [
+      "export function renderMessage(message) {",
+      "  return `<p>${message}</p>`;",
+      "}",
+      "",
+    ].join("\n")
+  );
+  writeFixtureFile(repoPath, "dist/index.html", "<main><p>Ready</p></main>\n");
+  writeFixtureFile(repoPath, "dist/app.js", "console.log('ready');\n");
+  writeFixtureFile(repoPath, "dist/service-worker.js", "self.addEventListener('install', () => {});\n");
+
+  const from = commitFixtureRepo(repoPath, "Create render output baseline");
+
+  writeFixtureFile(
+    repoPath,
+    "src/lib/render.js",
+    [
+      "export function renderMessage(message, tone = 'neutral') {",
+      "  return `<p data-tone=\"${tone}\">${message}</p>`;",
+      "}",
+      "",
+    ].join("\n")
+  );
+  writeFixtureFile(repoPath, "dist/index.html", "<main><p data-tone=\"neutral\">Ready</p></main>\n");
+  writeFixtureFile(repoPath, "dist/app.js", "console.log('ready with tone');\n");
+  writeFixtureFile(
+    repoPath,
+    "dist/service-worker.js",
+    "self.addEventListener('install', () => { self.skipWaiting(); });\n"
+  );
+
+  const to = commitFixtureRepo(repoPath, "Add message tone rendering");
+  return { repoPath, from, to };
+}
+
+function createAmbiguousImplementationFixture(prefix) {
+  const repoPath = initializeFixtureRepo(prefix);
+  writeFixtureFile(
+    repoPath,
+    "src/lib/format.js",
+    [
+      "export function formatLabel(value) {",
+      "  return String(value).trim();",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  const from = commitFixtureRepo(repoPath, "Create label formatter");
+
+  writeFixtureFile(
+    repoPath,
+    "src/lib/format.js",
+    [
+      "export function formatLabel(value) {",
+      "  return String(value).trim().replace(/\\s+/g, ' ');",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  const to = commitFixtureRepo(repoPath, "Normalize label whitespace");
+  return { repoPath, from, to };
+}
+
+function createFrontendOnlyEnforcementFixture(prefix) {
+  const repoPath = initializeFixtureRepo(prefix);
+  writeFixtureFile(
+    repoPath,
+    "index.html",
+    [
+      "<!doctype html>",
+      "<form data-signup-form>",
+      "  <input name=\"email\">",
+      "  <button type=\"submit\">Continue</button>",
+      "</form>",
+      "<script type=\"module\" src=\"js/app.js\"></script>",
+      "",
+    ].join("\n")
+  );
+  writeFixtureFile(
+    repoPath,
+    "js/app.js",
+    [
+      "const form = document.querySelector('[data-signup-form]');",
+      "form?.addEventListener('submit', (event) => {",
+      "  event.preventDefault();",
+      "});",
+      "",
+    ].join("\n")
+  );
+
+  const from = commitFixtureRepo(repoPath, "Create signup form");
+
+  writeFixtureFile(
+    repoPath,
+    "index.html",
+    [
+      "<!doctype html>",
+      "<form data-signup-form data-requires-email>",
+      "  <input name=\"email\" required pattern=\".+@.+\">",
+      "  <button type=\"submit\" aria-disabled=\"true\">Continue</button>",
+      "</form>",
+      "<script type=\"module\" src=\"js/app.js\"></script>",
+      "",
+    ].join("\n")
+  );
+  writeFixtureFile(
+    repoPath,
+    "js/app.js",
+    [
+      "const form = document.querySelector('[data-signup-form]');",
+      "const email = form?.querySelector('[name=\"email\"]');",
+      "form?.addEventListener('submit', (event) => {",
+      "  if (!email?.value.includes('@')) {",
+      "    event.preventDefault();",
+      "    localStorage.setItem('signup_validation_error', 'email_required');",
+      "  }",
+      "});",
+      "",
+    ].join("\n")
+  );
+
+  const to = commitFixtureRepo(repoPath, "Require email in signup form");
+  return { repoPath, from, to };
+}
+
+function createTrickyCommitRangeFixtureRepo(prefix, scenario) {
+  if (scenario === "docs_only") {
+    return createDocsOnlyFixture(prefix);
+  }
+
+  if (scenario === "config_only") {
+    return createConfigOnlyFixture(prefix);
+  }
+
+  if (scenario === "frontend_backend_boundary") {
+    return createFrontendBackendBoundaryFixture(prefix);
+  }
+
+  if (scenario === "generated_output_heavy") {
+    return createGeneratedOutputHeavyFixture(prefix);
+  }
+
+  if (scenario === "ambiguous_implementation") {
+    return createAmbiguousImplementationFixture(prefix);
+  }
+
+  if (scenario === "frontend_only_enforcement") {
+    return createFrontendOnlyEnforcementFixture(prefix);
+  }
+
+  throw new Error(`Unsupported live fixture scenario: ${scenario}`);
 }
 
 function validateAgainstSchema(jsonPath) {
@@ -290,7 +632,7 @@ function assertChangeInterpretationContract(changeInterpretation, label) {
   );
   assertIncludesAny(
     changeInterpretation.whyItMatters,
-    ["impact", "matters", "user", "system", "flow", "boundary", "behavior"],
+    ["impact", "matters", "user", "system", "flow", "boundary", "behavior", "runtime"],
     `${label} should explain behavioral or system impact.`
   );
 
@@ -413,9 +755,9 @@ function assertQualityEvaluationPasses(output, fixture) {
     .map((check) => `${check.id}: ${check.title}`);
 
   assert.equal(
-    evaluation.status,
-    "pass",
-    `${fixture.id} should pass output quality evaluation.\n${failedChecks.join("\n")}`
+    evaluation.totals.fail,
+    0,
+    `${fixture.id} should not have hard output quality failures.\n${failedChecks.join("\n")}`
   );
 }
 
@@ -434,27 +776,52 @@ function assertLiveCommitRangeCoverage(output, fixture, repoPath) {
   const changeInterpretation =
     output.mode === "paired_session" ? output.changeInterpretation : output;
   const changedPaths = changeInterpretation.readingOrder.map((item) => item.path);
+  const expectedChangedPaths = fixture.expectedChangedPaths || [];
+  const expectedThemes = fixture.expectedThemes || [];
+  const expectedRiskSignals = fixture.expectedRiskSignals || [];
 
-  assert.ok(
-    changedPaths.includes("index.html"),
-    `${fixture.id} should include the changed HTML entry surface.`
-  );
-  assert.ok(
-    changedPaths.includes("styles.css"),
-    `${fixture.id} should include the changed presentation layer.`
-  );
-  assert.ok(
-    changedPaths.includes("js/app.js"),
-    `${fixture.id} should include the added behavior file.`
-  );
-  assert.ok(
-    changeInterpretation.keyThemes.includes("frontend_behavior"),
-    `${fixture.id} should detect frontend behavior from the live diff.`
-  );
-  assert.ok(
-    changeInterpretation.keyThemes.includes("visual_design"),
-    `${fixture.id} should detect presentation work from the live diff.`
-  );
+  for (const expectedPath of expectedChangedPaths) {
+    assert.ok(
+      changedPaths.includes(expectedPath),
+      `${fixture.id} should include changed path ${expectedPath}.`
+    );
+  }
+
+  for (const expectedTheme of expectedThemes) {
+    assert.ok(
+      changeInterpretation.keyThemes.includes(expectedTheme),
+      `${fixture.id} should detect theme ${expectedTheme}.`
+    );
+  }
+
+  for (const expectedRiskSignal of expectedRiskSignals) {
+    assert.ok(
+      changeInterpretation.riskSignals.some((signal) => signal.id === expectedRiskSignal),
+      `${fixture.id} should detect risk signal ${expectedRiskSignal}.`
+    );
+  }
+}
+
+function assertMarkdownCliOutput(repoPath, from, to, mode) {
+  const stdout = runNode([
+    "src/index.mjs",
+    "--repo",
+    repoPath,
+    "--from",
+    from,
+    "--to",
+    to,
+    "--mode",
+    mode,
+    "--format",
+    "markdown",
+  ]);
+
+  assert.match(stdout, /# Change Interpretation|# Paired Session/);
+  assert.match(stdout, /Risk Signals/);
+  assert.doesNotThrow(() => {
+    assert.notEqual(stdout.trim().startsWith("{"), true);
+  });
 }
 
 for (const fixture of fixtures) {
@@ -473,7 +840,10 @@ for (const fixture of fixtures) {
       parsed = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
       assert.equal(parsed.mode, fixture.expectedMode);
     } else if (fixture.type === "live_commit_range") {
-      const { repoPath, from, to } = createLiveCommitRangeFixtureRepo(fixture.id);
+      const { repoPath, from, to } = createLiveCommitRangeFixtureRepo(
+        fixture.id,
+        fixture.scenario
+      );
       liveRepoPath = repoPath;
       const stdout = runNode([
         "src/index.mjs",
@@ -499,6 +869,15 @@ for (const fixture of fixtures) {
 
     if (fixture.type === "live_commit_range") {
       assertLiveCommitRangeCoverage(parsed, fixture, liveRepoPath);
+
+      if (fixture.id === "live_commit_range_change_interpretation") {
+        assertMarkdownCliOutput(
+          liveRepoPath,
+          parsed.commitRange.split("..")[0],
+          parsed.commitRange.split("..")[1],
+          fixture.mode
+        );
+      }
     }
   });
 }

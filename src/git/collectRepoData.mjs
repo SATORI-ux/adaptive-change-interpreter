@@ -14,6 +14,24 @@ function runGitCommand(repoPath, command) {
   }
 }
 
+function tryGitCommand(repoPath, command) {
+  try {
+    return {
+      ok: true,
+      stdout: execSync(`git -C "${repoPath}" ${command}`, {
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+      }).trim()
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      stderr: error.stderr?.toString()?.trim() || "",
+      message: error.message
+    };
+  }
+}
+
 function escapeForDoubleQuotes(value = "") {
   return value.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
 }
@@ -253,9 +271,13 @@ export function collectRepoData({ repo, from, to, mode }) {
 
   const absoluteRepoPath = path.resolve(repo);
 
-  const isGitRepo = runGitCommand(absoluteRepoPath, "rev-parse --is-inside-work-tree");
-  if (isGitRepo !== "true") {
-    throw new Error(`Not a valid Git repository: ${absoluteRepoPath}`);
+  const gitRepoCheck = tryGitCommand(absoluteRepoPath, "rev-parse --is-inside-work-tree");
+  if (!gitRepoCheck.ok || gitRepoCheck.stdout !== "true") {
+    const details = gitRepoCheck.stderr ? ` Git said: ${gitRepoCheck.stderr}` : "";
+    throw new Error(
+      `Repo path exists, but Git does not recognize it as a work tree: ${absoluteRepoPath}. ` +
+      `Use the folder that contains the repository's .git directory, or clone the repo first.${details}`
+    );
   }
 
   const commitRange = from && to ? `${from}..${to}` : null;

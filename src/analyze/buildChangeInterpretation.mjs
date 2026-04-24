@@ -68,10 +68,18 @@ function detectThemes(classifiedChangedFiles) {
       themes.push("notifications_background");
     } else if (category === "docs") {
       themes.push("documentation");
+    } else if (category === "analysis_engine" || category === "other") {
+      const hasImplementationLogic = classifiedChangedFiles.files?.some(
+        (file) => isImplementationLikeFile(file)
+      );
+
+      if (hasImplementationLogic) {
+        themes.push("implementation_logic");
+      }
     }
   }
 
-  return themes;
+  return uniq(themes);
 }
 
 function normalizeText(text = "") {
@@ -97,6 +105,16 @@ function selectRepresentativePaths(paths = []) {
   });
 
   return (preferred.length > 0 ? preferred : paths).slice(0, 3);
+}
+
+function describeRepresentativePaths(paths = [], fallback = "the changed files") {
+  const representativePaths = selectRepresentativePaths(paths);
+
+  if (representativePaths.length === 0) {
+    return fallback;
+  }
+
+  return representativePaths.join(", ");
 }
 
 function isGeneratedOrDerivedPath(filePath = "") {
@@ -420,17 +438,17 @@ function buildOverview(repoData, classifiedChangedFiles, themes, depthProfile) {
   if (changedAreas.length > 0) {
     summary += ` and most directly affects ${changedAreas.join(", ")}.`;
   } else {
-    summary += " and appears to be relatively narrow in surface area.";
+    summary += " but the changed paths do not map cleanly to a stronger known category, so the surface area should be treated as uncertain.";
   }
 
   if (intentSignals.length > 0) {
     summary += ` The strongest intent signals point to ${intentSignals.map((signal) => signal.label).join(", ")}.`;
   } else if (commitSubjects.length > 0) {
-    summary += ` The commit history in this range suggests themes such as: ${commitSubjects.join("; ")}.`;
+    summary += ` The commit subjects provide indirect intent evidence: ${commitSubjects.join("; ")}.`;
   } else if (themes.includes("frontend_behavior") && themes.includes("visual_design")) {
     summary += " It mainly reads as a UI-facing feature or refinement that spans both behavior and presentation.";
   } else if (themes.includes("backend_logic") && themes.includes("frontend_behavior")) {
-    summary += " It spans both frontend and backend layers, which usually means the change crosses a system boundary rather than living in one file.";
+    summary += " The observed file categories span frontend and backend layers, which is direct evidence that review should follow the flow across that boundary.";
   } else if (themes.includes("configuration_build")) {
     summary += " It includes configuration or build-related work, which can influence how the rest of the project behaves across environments.";
   }
@@ -480,14 +498,19 @@ function buildWhyItMatters(repoData, classifiedChangedFiles, themes, depthProfil
     return "This matters because configuration changes can affect environments, deployment behavior, or app wiring in ways that are not always obvious from the main feature code.";
   }
 
+  if (themes.includes("implementation_logic")) {
+    return "This matters because the change touches implementation logic without a stronger product-specific category signal, so the safest interpretation is to focus on what behavior the code path may now shape and what remains uncertain.";
+  }
+
   if ((counts.docs || 0) > 0 && repoData.changedFiles.length === counts.docs) {
     return "This range appears documentation-heavy, which often means the intent of the project or feature is being clarified rather than the runtime behavior changing directly.";
   }
 
-  return "This matters because even a small set of files can reveal the direction of the feature, the structure of the code, and the kinds of follow-up checks that will matter next.";
+  const changedPathSummary = describeRepresentativePaths(repoData.changedFiles);
+  return `This matters because the selected range changes ${changedPathSummary}, but the available category and intent signals are weak. Treat the behavioral impact as uncertain until you inspect the changed path directly and identify its callers or runtime surface.`;
 }
 
-function buildCodeShapeExplanation(repoData, classifiedChangedFiles, depthProfile) {
+function buildCodeShapeExplanation(repoData, classifiedChangedFiles, themes, depthProfile) {
   const counts = classifiedChangedFiles.countsByCategory || {};
   const changedSnippets = repoData.evidence?.changedFileSnippets || [];
   const diffSnippets = repoData.evidence?.changedDiffSnippets || [];
@@ -525,7 +548,12 @@ function buildCodeShapeExplanation(repoData, classifiedChangedFiles, depthProfil
     return "The code shape suggests some of the change lives in configuration or setup layers. That often means the visible behavior is influenced by environment or build rules rather than only by feature code.";
   }
 
-  return "The code shape suggests a focused change with a limited number of implementation surfaces, which is usually easier to reason about and test.";
+  if (themes.includes("implementation_logic")) {
+    return "The code shape suggests a focused implementation change where ownership is visible in source files, but the product intent is less explicit than in a named frontend, backend, or documentation change. Review the changed code path first, then use surrounding tests or callers to determine what behavior it actually supports.";
+  }
+
+  const evidencePaths = changedPaths.length > 0 ? changedPaths : diffPaths;
+  return `The code shape is not strongly categorized by the current heuristics. The clearest evidence is concentrated in ${describeRepresentativePaths(evidencePaths)}, so the safest reading is to start from those files and avoid naming a broader architecture pattern until callers, tests, or runtime entry points confirm it.`;
 }
 
 function buildReadingOrder(classifiedChangedFiles, repoData, intentSignals, depthProfile) {
@@ -645,7 +673,7 @@ function buildHowPiecesConnect(repoData, classifiedChangedFiles, themes, depthPr
 
   const changedAreas = summarizeChangedSurface(classifiedChangedFiles);
   if (connections.length === 0 && changedAreas.length > 1) {
-    connections.push(`The changed files appear to support one connected change across ${changedAreas.join(", ")}, rather than many unrelated concerns.`);
+    connections.push(`The changed categories span ${changedAreas.join(", ")}. That is evidence of a cross-surface change, but the exact relationship should be confirmed by tracing the changed files rather than assuming one unified feature.`);
   }
 
   if (intentSignals.length > 1) {
@@ -657,7 +685,8 @@ function buildHowPiecesConnect(repoData, classifiedChangedFiles, themes, depthPr
   }
 
   if (connections.length === 0) {
-    connections.push("The changed files appear to support one focused change rather than many unrelated concerns.");
+    const changedPathSummary = describeRepresentativePaths(repoData.changedFiles);
+    connections.push(`No strong cross-file relationship is directly observable from the current categories. Start with ${changedPathSummary} and confirm whether the change is isolated or connected through callers, imports, or documented workflow.`);
   }
 
   return connections;
@@ -677,14 +706,18 @@ function buildPatternTrend(themes, riskSignals, intentSignals, depthProfile) {
   }
 
   if (themes.includes("configuration_build")) {
-    return "This suggests a project-shape trend where configuration is becoming a meaningful part of behavior. That is not inherently bad, but it raises the importance of environment clarity.";
+    return "The observed theme is configuration or build wiring, so the trend evidence points to environment and tooling assumptions becoming part of behavior. The risk is not the configuration itself; it is unclear ownership when those assumptions are not documented or verified.";
+  }
+
+  if (themes.includes("implementation_logic")) {
+    return "This looks like a focused implementation adjustment with ambiguous product intent. The important pattern is not the file type itself, but whether the changed logic has clear callers, tests, and behavioral ownership.";
   }
 
   if (hasBoundaryRisk) {
     return "The current range suggests a growing boundary-complexity pattern, where bugs are more likely to come from mismatched assumptions between layers than from isolated syntax mistakes.";
   }
 
-  return "This looks like a focused incremental change rather than a broad architectural shift.";
+  return "No broad architectural trend is directly supported by the current evidence. Treat this as a localized change unless caller tracing, repeated file patterns, or risk signals show that the same concern is spreading.";
 }
 
 function buildFeatureSpecificVerification(
@@ -741,6 +774,11 @@ function buildFeatureSpecificVerification(
 
   if (themes.includes("configuration_build")) {
     checks.push("Check whether the feature still behaves correctly under the intended build or environment configuration.");
+  }
+
+  if (themes.includes("implementation_logic")) {
+    checks.push("Inspect the changed implementation path and identify which callers or workflows depend on it.");
+    checks.push("Run or add a focused test around the behavior most likely to be affected by the changed logic.");
   }
 
   return checks;
@@ -854,7 +892,11 @@ function buildCarryForwardLesson(themes, riskSignals = [], intentSignals = [], c
     return "Configuration changes are easier to trust when you explicitly name which environment assumptions live in code and which live in tooling.";
   }
 
-  return "A good review should help you understand the structure and likely pressure points of a change, not just what lines moved.";
+  if (themes.includes("implementation_logic")) {
+    return "When a change does not carry an obvious product label, the most useful habit is to trace callers and tests before naming intent too confidently.";
+  }
+
+  return "When the evidence does not support a confident product-level interpretation, the reusable lesson is to keep the explanation bounded: name the changed files, state what is inferred, and verify the behavior before generalizing.";
 }
 
 function buildConfidence(repoData, themes) {
@@ -925,6 +967,7 @@ export function buildChangeInterpretation(
     codeShape: buildCodeShapeExplanation(
       repoData,
       classifiedChangedFiles,
+      themes,
       depthProfile
     ),
     keyThemes: themes,

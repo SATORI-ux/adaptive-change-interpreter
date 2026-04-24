@@ -73,6 +73,12 @@ Use deeper explanations when you want more architecture and tradeoff context:
 node src/index.mjs --repo <repo-path> --from <from-ref> --to <to-ref> --mode paired_session --depth level_2
 ```
 
+Render human-readable Markdown instead of JSON:
+
+```powershell
+node src/index.mjs --repo <repo-path> --from <from-ref> --to <to-ref> --mode paired_session --format markdown
+```
+
 ## Save Output
 
 PowerShell examples for saving JSON output:
@@ -110,5 +116,6 @@ node src/index.mjs --repo <repo-path> --from <older-commit-sha> --to <newer-comm
 - `project_health_review` does not require `--from` or `--to`.
 - `change_interpretation` and `paired_session` require both `--from` and `--to`.
 - Output is JSON so it can be validated, saved, compared, or used as a fixture.
+- Use `--format markdown` for human-readable output; JSON remains the default.
 - Generated `dist/` and `build/` files are classified as `generated_output`, even when their extensions look like frontend, styling, docs, assets, or service worker files.
 - The current interface is intentionally CLI-first, but the structured output and evaluation pass are meant to preserve a path toward a polished GUI later.

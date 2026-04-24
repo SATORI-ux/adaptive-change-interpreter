@@ -4,6 +4,8 @@ import { classifyFiles } from "./analyze/classifyFiles.mjs";
 import { detectRiskSignals } from "./analyze/detectRiskSignals.mjs";
 import { buildChangeInterpretation } from "./analyze/buildChangeInterpretation.mjs";
 import { buildProjectHealthReview } from "./analyze/buildProjectHealthReview.mjs";
+import { renderMarkdown } from "./render/renderMarkdown.mjs";
+import { validateOptions } from "./cli/validateOptions.mjs";
 
 const program = new Command();
 
@@ -22,6 +24,11 @@ program
     "--mode <mode>",
     "Analysis mode: change_interpretation, project_health_review, paired_session",
     "change_interpretation"
+  )
+  .option(
+    "--format <format>",
+    "Output format: json or markdown",
+    "json"
   );
 
 program.parse();
@@ -29,6 +36,8 @@ program.parse();
 const options = program.opts();
 
 try {
+  validateOptions(options);
+
   const repoData = collectRepoData(options);
   const classifiedChangedFiles = classifyFiles(repoData.changedFiles);
   const classifiedTrackedFiles = classifyFiles(repoData.trackedFiles);
@@ -69,7 +78,11 @@ try {
     };
   }
 
-  console.log(JSON.stringify(output, null, 2));
+  if (options.format === "json") {
+    console.log(JSON.stringify(output, null, 2));
+  } else {
+    console.log(renderMarkdown(output));
+  }
 } catch (error) {
   console.error("Error:");
   console.error(error.message);

@@ -25,6 +25,125 @@ function findHardcodedUrls(text = "") {
   return [...new Set(matches)];
 }
 
+function normalizePath(filePath = "") {
+  return filePath.replaceAll("\\", "/").toLowerCase();
+}
+
+function getChangedPathsByCategory(classifiedChangedFiles, category) {
+  return classifiedChangedFiles.files
+    ?.filter((file) => file.category === category)
+    .map((file) => file.path) || [];
+}
+
+function getAddedDiffLines(diffText = "") {
+  return diffText
+    .split("\n")
+    .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
+    .map((line) => line.slice(1).trim())
+    .filter(Boolean);
+}
+
+function getAddedDiffLinesByPath(diffSnippets = []) {
+  return diffSnippets.map((item) => ({
+    path: item.path,
+    lines: getAddedDiffLines(item.excerpt)
+  }));
+}
+
+function extractStringLiterals(text = "") {
+  const matches = text.match(/["'`]([^"'`]{4,80})["'`]/g) || [];
+  return matches
+    .map((match) => match.slice(1, -1).trim())
+    .filter((value) => {
+      const normalized = value.toLowerCase();
+      return (
+        normalized.length >= 4 &&
+        !normalized.startsWith("http") &&
+        !["true", "false", "null", "undefined", "button", "submit"].includes(normalized)
+      );
+    });
+}
+
+function findDuplicatedAddedLiterals(diffSnippets = []) {
+  const literalLocations = new Map();
+
+  for (const item of diffSnippets) {
+    const addedText = getAddedDiffLines(item.excerpt).join("\n");
+
+    for (const literal of extractStringLiterals(addedText)) {
+      const normalized = literal.toLowerCase();
+      const locations = literalLocations.get(normalized) || {
+        literal,
+        paths: new Set()
+      };
+      locations.paths.add(item.path);
+      literalLocations.set(normalized, locations);
+    }
+  }
+
+  return [...literalLocations.values()]
+    .filter((entry) => entry.paths.size > 1)
+    .map((entry) => ({
+      literal: entry.literal,
+      paths: [...entry.paths]
+    }));
+}
+
+function findFrontendOnlyEnforcementEvidence(diffSnippets = [], classifiedChangedFiles) {
+  const changedFrontendPaths = new Set(
+    getChangedPathsByCategory(classifiedChangedFiles, "frontend_app")
+  );
+  const enforcementPattern = /\b(required|disabled|validate|validation|role|admin|auth|token|private|permission|allowed|limit|quota|guard|protect|deny|forbid)\b|localstorage|sessionstorage|data-requires-|aria-disabled|pattern=/i;
+
+  return getAddedDiffLinesByPath(diffSnippets)
+    .filter((item) => changedFrontendPaths.has(item.path))
+    .flatMap((item) =>
+      item.lines
+        .filter((line) => enforcementPattern.test(line))
+        .map((line) => `${item.path}: ${line}`)
+    )
+    .slice(0, 8);
+}
+
+function findEnvironmentConfigEvidence(diffSnippets = [], classifiedChangedFiles) {
+  const changedConfigPaths = new Set(
+    getChangedPathsByCategory(classifiedChangedFiles, "config_build")
+  );
+  const envPattern = /\b(process\.env|import\.meta\.env|node_env|mode|env|vite_|api_url|base_url|supabase|vercel|production|preview|staging)\b/i;
+
+  return getAddedDiffLinesByPath(diffSnippets)
+    .filter((item) => changedConfigPaths.has(item.path))
+    .flatMap((item) =>
+      item.lines
+        .filter((line) => envPattern.test(line))
+        .map((line) => `${item.path}: ${line}`)
+    )
+    .slice(0, 8);
+}
+
+function hasSourceAndGeneratedChanged(classifiedChangedFiles) {
+  const changedGenerated = getChangedPathsByCategory(
+    classifiedChangedFiles,
+    "generated_output"
+  );
+  const changedSource = classifiedChangedFiles.files
+    ?.filter((file) => {
+      const normalized = normalizePath(file.path);
+      return (
+        file.category !== "generated_output" &&
+        file.category !== "local_artifact" &&
+        !normalized.startsWith("dist/") &&
+        !normalized.startsWith("build/")
+      );
+    })
+    .map((file) => file.path) || [];
+
+  return {
+    changedGenerated,
+    changedSource
+  };
+}
+
 export function detectRiskSignals(repoData, classifiedChangedFiles, classifiedTrackedFiles) {
   const signals = [];
   const evidence = repoData.evidence || {};
@@ -89,6 +208,31 @@ export function detectRiskSignals(repoData, classifiedChangedFiles, classifiedTr
     });
   }
 
+  const changedOutputShape = hasSourceAndGeneratedChanged(classifiedChangedFiles);
+  if (
+    changedOutputShape.changedGenerated.length > 0 &&
+    changedOutputShape.changedSource.length > 0
+  ) {
+    signals.push({
+      id: "generated_output_changed_with_source",
+      severity: "medium",
+      category: "workflow_complexity",
+      title: "Generated output changed in the same range as source files",
+      whyItMatters:
+        "When source and generated files move together, reviewers can lose track of which files are meant to be edited and which are derived from the build.",
+      evidence: [
+        `Source changes: ${changedOutputShape.changedSource.slice(0, 5).join(", ")}`,
+        `Generated output changes: ${changedOutputShape.changedGenerated.slice(0, 5).join(", ")}`
+      ],
+      whatToVerify: [
+        "Confirm which changed files are the editable source of truth.",
+        "Check whether generated output should be regenerated rather than manually edited."
+      ],
+      mitigation:
+        "Document or enforce whether generated output belongs in version control for this workflow."
+    });
+  }
+
   const envLikeFiles = evidence.envLikeTrackedFiles?.length
     ? evidence.envLikeTrackedFiles
     : findEnvLikeTrackedFiles(repoData.trackedFiles);
@@ -129,6 +273,28 @@ export function detectRiskSignals(repoData, classifiedChangedFiles, classifiedTr
     });
   }
 
+  const envConfigEvidence = findEnvironmentConfigEvidence(
+    evidence.changedDiffSnippets || [],
+    classifiedChangedFiles
+  );
+  if (envConfigEvidence.length > 0) {
+    signals.push({
+      id: "environment_config_changed",
+      severity: "medium",
+      category: "config_drift",
+      title: "Environment-sensitive configuration changed",
+      whyItMatters:
+        "Configuration tied to modes, environment variables, or deployment targets can behave differently across local, preview, and production environments.",
+      evidence: envConfigEvidence,
+      whatToVerify: [
+        "Confirm the intended behavior for local, preview, and production environments.",
+        "Check whether environment-specific values are documented outside the code path."
+      ],
+      mitigation:
+        "Keep environment ownership explicit through documented variables, scripts, or deployment settings."
+    });
+  }
+
   const serviceWorkerFiles = evidence.serviceWorkerFiles?.length
     ? evidence.serviceWorkerFiles
     : findFilesByCategory(classifiedTrackedFiles, "notifications_background");
@@ -152,6 +318,7 @@ export function detectRiskSignals(repoData, classifiedChangedFiles, classifiedTr
 
   const changedFrontend = hasCategory(classifiedChangedFiles, "frontend_app");
   const changedBackend = hasCategory(classifiedChangedFiles, "backend");
+  const changedDatabase = hasCategory(classifiedChangedFiles, "database");
   if (changedFrontend && changedBackend) {
     signals.push({
       id: "frontend_backend_both_touched",
@@ -169,6 +336,68 @@ export function detectRiskSignals(repoData, classifiedChangedFiles, classifiedTr
       ],
       mitigation:
         "Test the flow end to end, not just file by file."
+    });
+  }
+
+  const duplicatedAddedLiterals = findDuplicatedAddedLiterals(
+    evidence.changedDiffSnippets || []
+  );
+  const crossLayerDuplicatedLiterals = duplicatedAddedLiterals.filter((entry) => {
+    const categories = new Set(
+      entry.paths
+        .map((filePath) =>
+          classifiedChangedFiles.files?.find((file) => file.path === filePath)?.category
+        )
+        .filter(Boolean)
+    );
+
+    return categories.size > 1;
+  });
+
+  if (crossLayerDuplicatedLiterals.length > 0) {
+    signals.push({
+      id: "duplicated_cross_layer_assumptions",
+      severity: "medium",
+      category: "boundary_complexity",
+      title: "Repeated literals suggest duplicated assumptions across layers",
+      whyItMatters:
+        "When the same status, role, route, or validation value is repeated in multiple layers, one copy can drift while the other still looks correct.",
+      evidence: crossLayerDuplicatedLiterals
+        .slice(0, 5)
+        .map((entry) => `"${entry.literal}" appears in ${entry.paths.join(", ")}`),
+      whatToVerify: [
+        "Confirm whether the repeated value has a single source of truth.",
+        "Check whether frontend messaging and backend enforcement can drift independently."
+      ],
+      mitigation:
+        "Centralize shared constants when practical, or document which layer owns the value."
+    });
+  }
+
+  const frontendOnlyEnforcementEvidence = findFrontendOnlyEnforcementEvidence(
+    evidence.changedDiffSnippets || [],
+    classifiedChangedFiles
+  );
+  if (
+    changedFrontend &&
+    !changedBackend &&
+    !changedDatabase &&
+    frontendOnlyEnforcementEvidence.length > 0
+  ) {
+    signals.push({
+      id: "frontend_only_enforcement",
+      severity: "medium",
+      category: "boundary_complexity",
+      title: "Enforcement-like behavior changed only in the frontend",
+      whyItMatters:
+        "Client-side guards, required fields, or permission checks can improve UX, but they do not enforce the rule unless a trusted backend or data layer also owns it.",
+      evidence: frontendOnlyEnforcementEvidence,
+      whatToVerify: [
+        "Confirm whether the same rule is enforced outside the frontend.",
+        "Check whether bypassing the UI still preserves the intended constraint."
+      ],
+      mitigation:
+        "Keep frontend checks as UX support and place authoritative enforcement in a trusted layer when the rule matters."
     });
   }
 

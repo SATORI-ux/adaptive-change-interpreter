@@ -21,6 +21,7 @@ Group changes into meaningful areas:
 - validation
 - data flow
 - config
+- implementation logic
 - etc.
 
 ### 5. Reading order

@@ -10,15 +10,85 @@
     "id": "live_commit_range_change_interpretation",
     "type": "live_commit_range",
     "description": "Builds a tiny Git repo with a real checkout UI diff and validates live change interpretation.",
+    "scenario": "checkout_ui",
     "mode": "change_interpretation",
-    "expectedMode": "change_interpretation"
+    "expectedMode": "change_interpretation",
+    "expectedChangedPaths": ["index.html", "styles.css", "js/app.js"],
+    "expectedThemes": ["frontend_behavior", "visual_design"]
   },
   {
     "id": "live_commit_range_paired_session",
     "type": "live_commit_range",
     "description": "Builds a tiny Git repo with a real checkout UI diff and validates live paired-session analysis.",
+    "scenario": "checkout_ui",
     "mode": "paired_session",
-    "expectedMode": "paired_session"
+    "expectedMode": "paired_session",
+    "expectedChangedPaths": ["index.html", "styles.css", "js/app.js"],
+    "expectedThemes": ["frontend_behavior", "visual_design"]
+  },
+  {
+    "id": "live_docs_only_change_interpretation",
+    "type": "live_commit_range",
+    "description": "Builds a tiny Git repo with a docs-only diff and validates documentation-focused interpretation.",
+    "scenario": "docs_only",
+    "mode": "change_interpretation",
+    "expectedMode": "change_interpretation",
+    "expectedChangedPaths": ["README.md", "docs/operating-notes.md"],
+    "expectedThemes": ["documentation"]
+  },
+  {
+    "id": "live_config_only_change_interpretation",
+    "type": "live_commit_range",
+    "description": "Builds a tiny Git repo with a config-only diff and validates configuration-focused interpretation.",
+    "scenario": "config_only",
+    "mode": "change_interpretation",
+    "expectedMode": "change_interpretation",
+    "expectedChangedPaths": ["package.json", "vite.config.js"],
+    "expectedThemes": ["configuration_build"],
+    "expectedRiskSignals": ["environment_config_changed"]
+  },
+  {
+    "id": "live_frontend_backend_boundary_change",
+    "type": "live_commit_range",
+    "description": "Builds a tiny Git repo with a frontend/backend diff and validates boundary-risk interpretation.",
+    "scenario": "frontend_backend_boundary",
+    "mode": "change_interpretation",
+    "expectedMode": "change_interpretation",
+    "expectedChangedPaths": ["index.html", "api/orders.js"],
+    "expectedThemes": ["frontend_behavior", "backend_logic"],
+    "expectedRiskSignals": ["frontend_backend_both_touched", "duplicated_cross_layer_assumptions"]
+  },
+  {
+    "id": "live_generated_output_heavy_change",
+    "type": "live_commit_range",
+    "description": "Builds a tiny Git repo with source plus generated output and validates generated-output risk interpretation.",
+    "scenario": "generated_output_heavy",
+    "mode": "change_interpretation",
+    "expectedMode": "change_interpretation",
+    "expectedChangedPaths": ["src/lib/render.js", "dist/index.html", "dist/app.js", "dist/service-worker.js"],
+    "expectedThemes": ["implementation_logic"],
+    "expectedRiskSignals": ["tracked_generated_output", "service_worker_present", "generated_output_changed_with_source"]
+  },
+  {
+    "id": "live_frontend_only_enforcement_change",
+    "type": "live_commit_range",
+    "description": "Builds a tiny Git repo with frontend-only enforcement-like changes and validates boundary-risk interpretation.",
+    "scenario": "frontend_only_enforcement",
+    "mode": "change_interpretation",
+    "expectedMode": "change_interpretation",
+    "expectedChangedPaths": ["index.html", "js/app.js"],
+    "expectedThemes": ["frontend_behavior"],
+    "expectedRiskSignals": ["frontend_only_enforcement"]
+  },
+  {
+    "id": "live_ambiguous_implementation_change",
+    "type": "live_commit_range",
+    "description": "Builds a tiny Git repo with an ambiguous implementation diff and validates uncertainty-aware interpretation.",
+    "scenario": "ambiguous_implementation",
+    "mode": "change_interpretation",
+    "expectedMode": "change_interpretation",
+    "expectedChangedPaths": ["src/lib/format.js"],
+    "expectedThemes": ["implementation_logic"]
   },
   {
     "id": "sample_repo_paired_session_fixture",

@@ -188,7 +188,8 @@
               "data_model",
               "configuration_build",
               "notifications_background",
-              "documentation"
+              "documentation",
+              "implementation_logic"
             ]
           }
         },
