@@ -28,7 +28,7 @@ npm.cmd test
 Evaluate a saved output against the explanation-quality contract:
 
 ```powershell
-npm.cmd run evaluate:output -- examples\latest-output.json
+npm.cmd run evaluate:output -- <output-json-path>
 ```
 
 ## Repository Input
@@ -38,13 +38,13 @@ npm.cmd run evaluate:output -- examples\latest-output.json
 Example clone target:
 
 ```powershell
-git clone https://github.com/SATORI-ux/within-reach "C:\Users\dukes\OneDrive\Desktop\HTML-materials\Projects\within-reach"
+git clone <repository-url> <repo-path>
 ```
 
-Existing local example:
+Use the cloned checkout as the `--repo` value:
 
 ```powershell
-C:\Users\dukes\OneDrive\Desktop\HTML-materials\Projects\check-in-space
+--repo <repo-path>
 ```
 
 ## Main Modes
@@ -52,25 +52,25 @@ C:\Users\dukes\OneDrive\Desktop\HTML-materials\Projects\check-in-space
 Project health review:
 
 ```powershell
-node src/index.mjs --repo "C:\Users\dukes\OneDrive\Desktop\HTML-materials\Projects\check-in-space" --mode project_health_review
+node src/index.mjs --repo <repo-path> --mode project_health_review
 ```
 
 Change interpretation for a commit range:
 
 ```powershell
-node src/index.mjs --repo "C:\Users\dukes\OneDrive\Desktop\HTML-materials\Projects\check-in-space" --from HEAD~1 --to HEAD --mode change_interpretation
+node src/index.mjs --repo <repo-path> --from <from-ref> --to <to-ref> --mode change_interpretation
 ```
 
 Paired session, combining change interpretation and project health review:
 
 ```powershell
-node src/index.mjs --repo "C:\Users\dukes\OneDrive\Desktop\HTML-materials\Projects\check-in-space" --from HEAD~1 --to HEAD --mode paired_session
+node src/index.mjs --repo <repo-path> --from <from-ref> --to <to-ref> --mode paired_session
 ```
 
 Use deeper explanations when you want more architecture and tradeoff context:
 
 ```powershell
-node src/index.mjs --repo "C:\Users\dukes\OneDrive\Desktop\HTML-materials\Projects\check-in-space" --from HEAD~3 --to HEAD --mode paired_session --depth level_2
+node src/index.mjs --repo <repo-path> --from <from-ref> --to <to-ref> --mode paired_session --depth level_2
 ```
 
 ## Save Output
@@ -78,17 +78,17 @@ node src/index.mjs --repo "C:\Users\dukes\OneDrive\Desktop\HTML-materials\Projec
 PowerShell examples for saving JSON output:
 
 ```powershell
-node src/index.mjs --repo "C:\Users\dukes\OneDrive\Desktop\HTML-materials\Projects\check-in-space" --mode project_health_review | Set-Content -Path "examples\check-in-space-health-review.json"
+node src/index.mjs --repo <repo-path> --mode project_health_review | Set-Content -Path <output-json-path>
 ```
 
 ```powershell
-node src/index.mjs --repo "C:\Users\dukes\OneDrive\Desktop\HTML-materials\Projects\check-in-space" --from HEAD~1 --to HEAD --mode paired_session --depth level_2 | Set-Content -Path "examples\check-in-space-paired-session.json"
+node src/index.mjs --repo <repo-path> --from <from-ref> --to <to-ref> --mode paired_session --depth level_2 | Set-Content -Path <output-json-path>
 ```
 
 Validate a saved output file against the schema:
 
 ```powershell
-node src/validateSchema.mjs "examples\check-in-space-paired-session.json"
+node src/validateSchema.mjs <output-json-path>
 ```
 
 ## Useful Commit Range Commands
@@ -96,13 +96,13 @@ node src/validateSchema.mjs "examples\check-in-space-paired-session.json"
 Inspect recent commits in the target repo:
 
 ```powershell
-git -C "C:\Users\dukes\OneDrive\Desktop\HTML-materials\Projects\check-in-space" log --oneline -5
+git -C <repo-path> log --oneline -5
 ```
 
 Use explicit commit SHAs when `HEAD~1..HEAD` is too narrow:
 
 ```powershell
-node src/index.mjs --repo "C:\Users\dukes\OneDrive\Desktop\HTML-materials\Projects\check-in-space" --from <older-commit-sha> --to <newer-commit-sha> --mode change_interpretation --depth level_2
+node src/index.mjs --repo <repo-path> --from <older-commit-sha> --to <newer-commit-sha> --mode change_interpretation --depth level_2
 ```
 
 ## Notes For This Stage
