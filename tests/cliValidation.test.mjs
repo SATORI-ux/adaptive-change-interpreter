@@ -25,6 +25,29 @@ function runCliExpectFailure(args) {
   throw new Error("Expected CLI command to fail.");
 }
 
+function runGit(repoPath, args) {
+  return execFileSync("git", args, {
+    cwd: repoPath,
+    encoding: "utf8",
+  }).trim();
+}
+
+function createGitRepo(repoPath) {
+  fs.mkdirSync(repoPath, { recursive: true });
+  runGit(repoPath, ["init", "--quiet"]);
+  fs.writeFileSync(path.join(repoPath, "README.md"), "# Suggested Repo\n");
+  runGit(repoPath, ["add", "."]);
+  runGit(repoPath, [
+    "-c",
+    "user.name=CLI Validation Fixture",
+    "-c",
+    "user.email=cli-validation@example.com",
+    "commit",
+    "-m",
+    "Create suggested repo",
+  ]);
+}
+
 test("rejects unsupported mode before analysis", () => {
   const result = runCliExpectFailure([
     "--repo",
@@ -77,4 +100,42 @@ test("explains when an existing path is not a Git checkout", () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Git does not recognize it as a work tree/);
   assert.match(result.stderr, /folder that contains the repository's \.git directory/);
+});
+
+test("suggests a sibling Git checkout when the path points beside a repo", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aci-parent-git-"));
+  const repoPath = path.join(tempDir, "repo");
+  const siblingPath = path.join(tempDir, "not-the-repo");
+
+  createGitRepo(repoPath);
+  fs.mkdirSync(siblingPath, { recursive: true });
+
+  const result = runCliExpectFailure([
+    "--repo",
+    siblingPath,
+    "--mode",
+    "project_health_review"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Nearby Git checkout suggestion/);
+  assert.match(result.stderr, /repo/);
+});
+
+test("suggests a child Git checkout when the path points at a parent folder", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "aci-child-git-"));
+  const repoPath = path.join(tempDir, "repo");
+
+  createGitRepo(repoPath);
+
+  const result = runCliExpectFailure([
+    "--repo",
+    tempDir,
+    "--mode",
+    "project_health_review"
+  ]);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Nearby Git checkout suggestion/);
+  assert.match(result.stderr, /repo/);
 });

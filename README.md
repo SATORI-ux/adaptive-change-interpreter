@@ -81,14 +81,20 @@ node src/index.mjs --repo <repo-path> --from <from-ref> --to <to-ref> --mode pai
 
 ## Save Output
 
-PowerShell examples for saving JSON output:
+Save JSON output:
 
 ```powershell
-node src/index.mjs --repo <repo-path> --mode project_health_review | Set-Content -Path <output-json-path>
+node src/index.mjs --repo <repo-path> --mode project_health_review --output <output-json-path>
 ```
 
 ```powershell
-node src/index.mjs --repo <repo-path> --from <from-ref> --to <to-ref> --mode paired_session --depth level_2 | Set-Content -Path <output-json-path>
+node src/index.mjs --repo <repo-path> --from <from-ref> --to <to-ref> --mode paired_session --depth level_2 --output <output-json-path>
+```
+
+Save Markdown output:
+
+```powershell
+node src/index.mjs --repo <repo-path> --from <from-ref> --to <to-ref> --mode paired_session --format markdown --output <output-markdown-path>
 ```
 
 Validate a saved output file against the schema:

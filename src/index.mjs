@@ -1,4 +1,6 @@
 import { Command } from "commander";
+import fs from "node:fs";
+import path from "node:path";
 import { collectRepoData } from "./git/collectRepoData.mjs";
 import { classifyFiles } from "./analyze/classifyFiles.mjs";
 import { detectRiskSignals } from "./analyze/detectRiskSignals.mjs";
@@ -29,6 +31,10 @@ program
     "--format <format>",
     "Output format: json or markdown",
     "json"
+  )
+  .option(
+    "--output <path>",
+    "Write output to a file instead of stdout"
   );
 
 program.parse();
@@ -78,10 +84,16 @@ try {
     };
   }
 
-  if (options.format === "json") {
-    console.log(JSON.stringify(output, null, 2));
+  const renderedOutput = options.format === "json"
+    ? `${JSON.stringify(output, null, 2)}\n`
+    : renderMarkdown(output);
+
+  if (options.output) {
+    const outputPath = path.resolve(options.output);
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, renderedOutput);
   } else {
-    console.log(renderMarkdown(output));
+    process.stdout.write(renderedOutput);
   }
 } catch (error) {
   console.error("Error:");

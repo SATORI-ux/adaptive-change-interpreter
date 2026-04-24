@@ -32,6 +32,66 @@ function tryGitCommand(repoPath, command) {
   }
 }
 
+function pathHasGitDirectory(candidatePath) {
+  return fs.existsSync(path.join(candidatePath, ".git"));
+}
+
+function safeReadDirectories(directoryPath) {
+  try {
+    return fs.readdirSync(directoryPath, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .filter((entry) => !entry.name.startsWith("."))
+      .map((entry) => path.join(directoryPath, entry.name));
+  } catch {
+    return [];
+  }
+}
+
+function addGitRootSuggestion(suggestions, candidatePath) {
+  if (!candidatePath || !fs.existsSync(candidatePath)) {
+    return;
+  }
+
+  if (pathHasGitDirectory(candidatePath)) {
+    suggestions.add(path.resolve(candidatePath));
+  }
+}
+
+function findNearbyGitRoots(startPath) {
+  const suggestions = new Set();
+  const absoluteStartPath = path.resolve(startPath);
+
+  let currentPath = absoluteStartPath;
+  for (let depth = 0; depth < 4; depth += 1) {
+    addGitRootSuggestion(suggestions, currentPath);
+
+    for (const childPath of safeReadDirectories(currentPath).slice(0, 30)) {
+      addGitRootSuggestion(suggestions, childPath);
+    }
+
+    const parentPath = path.dirname(currentPath);
+    if (parentPath === currentPath) {
+      break;
+    }
+
+    currentPath = parentPath;
+  }
+
+  return [...suggestions]
+    .filter((suggestion) => suggestion !== absoluteStartPath)
+    .slice(0, 5);
+}
+
+function formatGitRootSuggestions(startPath) {
+  const suggestions = findNearbyGitRoots(startPath);
+
+  if (suggestions.length === 0) {
+    return "";
+  }
+
+  return ` Nearby Git checkout suggestion(s): ${suggestions.join("; ")}`;
+}
+
 function escapeForDoubleQuotes(value = "") {
   return value.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
 }
@@ -274,9 +334,10 @@ export function collectRepoData({ repo, from, to, mode }) {
   const gitRepoCheck = tryGitCommand(absoluteRepoPath, "rev-parse --is-inside-work-tree");
   if (!gitRepoCheck.ok || gitRepoCheck.stdout !== "true") {
     const details = gitRepoCheck.stderr ? ` Git said: ${gitRepoCheck.stderr}` : "";
+    const suggestions = formatGitRootSuggestions(absoluteRepoPath);
     throw new Error(
       `Repo path exists, but Git does not recognize it as a work tree: ${absoluteRepoPath}. ` +
-      `Use the folder that contains the repository's .git directory, or clone the repo first.${details}`
+      `Use the folder that contains the repository's .git directory, or clone the repo first.${suggestions}${details}`
     );
   }
 
