@@ -7,6 +7,20 @@
     "expectedMode": "project_health_review"
   },
   {
+    "id": "live_commit_range_change_interpretation",
+    "type": "live_commit_range",
+    "description": "Builds a tiny Git repo with a real checkout UI diff and validates live change interpretation.",
+    "mode": "change_interpretation",
+    "expectedMode": "change_interpretation"
+  },
+  {
+    "id": "live_commit_range_paired_session",
+    "type": "live_commit_range",
+    "description": "Builds a tiny Git repo with a real checkout UI diff and validates live paired-session analysis.",
+    "mode": "paired_session",
+    "expectedMode": "paired_session"
+  },
+  {
     "id": "sample_repo_paired_session_fixture",
     "type": "saved_output",
     "description": "Validates the saved paired-session sample output fixture.",

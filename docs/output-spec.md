@@ -76,3 +76,19 @@ Output is weak if:
 - it narrates syntax
 - it lacks risk or verification insight
 - it assumes intent without evidence
+
+---
+
+## Evaluation pass
+
+The project includes a deterministic output-quality evaluator to catch explanations that are structurally valid but weak against the product contract.
+
+The evaluator should check:
+- required explanation coverage
+- meaningful themes and reading order
+- concrete evidence or file/artifact references
+- risk signals with evidence and verification guidance
+- action-oriented verification steps
+- confidence language that separates direct evidence from inference
+
+The evaluator is not a replacement for human judgment. It is a guardrail that helps keep CLI output, saved fixtures, and future GUI-facing output aligned with the same explanation standards.

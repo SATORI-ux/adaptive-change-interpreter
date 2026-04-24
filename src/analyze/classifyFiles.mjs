@@ -56,10 +56,22 @@ function looksLikeAnalysisEnginePath(normalized, ext) {
   );
 }
 
+function looksLikeGeneratedOutputPath(normalized) {
+  return (
+    normalized.startsWith("dist/") ||
+    normalized.startsWith("build/")
+  );
+}
+
 function getFileCategory(filePath) {
   const normalized = filePath.replaceAll("\\", "/");
+  const normalizedLower = normalized.toLowerCase();
   const ext = path.extname(normalized).toLowerCase();
   const fileName = path.basename(normalized).toLowerCase();
+
+  if (looksLikeGeneratedOutputPath(normalizedLower)) {
+    return "generated_output";
+  }
 
   if (
     normalized === "readme.md" ||
@@ -135,13 +147,6 @@ function getFileCategory(filePath) {
     ext === ".ico"
   ) {
     return "assets";
-  }
-
-  if (
-    normalized.startsWith("dist/") ||
-    normalized.startsWith("build/")
-  ) {
-    return "generated_output";
   }
 
   if (

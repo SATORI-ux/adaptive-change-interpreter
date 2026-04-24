@@ -10,6 +10,17 @@ This project translates code changes into structured explanations of:
 
 It is a learning and judgment tool, not a generic explainer.
 
+## Product direction
+The current product surface is a local-first CLI and JSON engine.
+
+Longer term, this should be able to support a polished GUI for reviewing change interpretations, reading order, risks, and verification steps. That future interface should not change the core product role: the engine still needs to produce grounded, judgment-oriented interpretations before the UI tries to make them pleasant to explore.
+
+Near-term feature decisions should therefore preserve:
+- stable structured output
+- clear evaluation criteria
+- explainable quality checks
+- separation between interpretation logic and presentation
+
 ## Core principle
 Prioritize:
 - behavior

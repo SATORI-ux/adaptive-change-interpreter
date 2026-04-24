@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { evaluateOutputQuality } from "../src/evaluate/evaluateOutputQuality.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const fixturesPath = path.join(
@@ -22,11 +23,154 @@ function runNode(args) {
   });
 }
 
+function runGit(repoPath, args) {
+  return execFileSync("git", args, {
+    cwd: repoPath,
+    encoding: "utf8",
+  }).trim();
+}
+
 function writeTempJson(prefix, contents) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-`));
   const filePath = path.join(tempDir, "output.json");
   fs.writeFileSync(filePath, contents);
   return filePath;
+}
+
+function writeFixtureFile(repoPath, filePath, contents) {
+  const absolutePath = path.join(repoPath, filePath);
+  fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+  fs.writeFileSync(absolutePath, contents);
+}
+
+function commitFixtureRepo(repoPath, message) {
+  runGit(repoPath, ["add", "."]);
+  runGit(repoPath, [
+    "-c",
+    "user.name=Acceptance Fixture",
+    "-c",
+    "user.email=acceptance-fixture@example.com",
+    "commit",
+    "-m",
+    message,
+  ]);
+
+  return runGit(repoPath, ["rev-parse", "HEAD"]);
+}
+
+function createLiveCommitRangeFixtureRepo(prefix) {
+  const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-repo-`));
+
+  runGit(repoPath, ["init", "--quiet"]);
+  runGit(repoPath, ["config", "core.autocrlf", "false"]);
+
+  writeFixtureFile(
+    repoPath,
+    "README.md",
+    [
+      "# Tiny Checkout",
+      "",
+      "A small checkout interface used to verify live commit-range interpretation.",
+      "",
+    ].join("\n")
+  );
+  writeFixtureFile(
+    repoPath,
+    "index.html",
+    [
+      "<!doctype html>",
+      "<html lang=\"en\">",
+      "<head>",
+      "  <meta charset=\"utf-8\">",
+      "  <title>Tiny Checkout</title>",
+      "  <link rel=\"stylesheet\" href=\"styles.css\">",
+      "</head>",
+      "<body>",
+      "  <main class=\"checkout\">",
+      "    <h1>Checkout</h1>",
+      "    <p class=\"status\">Ready to review your order.</p>",
+      "    <button type=\"button\">Place order</button>",
+      "  </main>",
+      "</body>",
+      "</html>",
+      "",
+    ].join("\n")
+  );
+  writeFixtureFile(
+    repoPath,
+    "styles.css",
+    [
+      ".checkout {",
+      "  max-width: 32rem;",
+      "  margin: 4rem auto;",
+      "  font-family: system-ui, sans-serif;",
+      "}",
+      "",
+    ].join("\n")
+  );
+
+  const from = commitFixtureRepo(repoPath, "Create checkout surface");
+
+  writeFixtureFile(
+    repoPath,
+    "index.html",
+    [
+      "<!doctype html>",
+      "<html lang=\"en\">",
+      "<head>",
+      "  <meta charset=\"utf-8\">",
+      "  <title>Tiny Checkout</title>",
+      "  <link rel=\"stylesheet\" href=\"styles.css\">",
+      "  <script type=\"module\" src=\"js/app.js\"></script>",
+      "</head>",
+      "<body>",
+      "  <main class=\"checkout\" data-state=\"review\">",
+      "    <h1>Review checkout</h1>",
+      "    <p class=\"status\" data-checkout-status>Confirm stock before placing the order.</p>",
+      "    <button type=\"button\" data-confirm-order>Confirm order</button>",
+      "  </main>",
+      "</body>",
+      "</html>",
+      "",
+    ].join("\n")
+  );
+  writeFixtureFile(
+    repoPath,
+    "styles.css",
+    [
+      ".checkout {",
+      "  max-width: 32rem;",
+      "  margin: 4rem auto;",
+      "  padding: 1.5rem;",
+      "  font-family: system-ui, sans-serif;",
+      "  border: 1px solid #d8dee9;",
+      "}",
+      "",
+      ".checkout[data-state=\"confirmed\"] {",
+      "  border-color: #2f855a;",
+      "}",
+      "",
+    ].join("\n")
+  );
+  writeFixtureFile(
+    repoPath,
+    "js/app.js",
+    [
+      "const checkout = document.querySelector('[data-state]');",
+      "const status = document.querySelector('[data-checkout-status]');",
+      "const confirmButton = document.querySelector('[data-confirm-order]');",
+      "",
+      "confirmButton?.addEventListener('click', () => {",
+      "  checkout.dataset.state = 'confirmed';",
+      "  status.textContent = 'Order confirmed.';",
+      "});",
+      "",
+    ].join("\n")
+  );
+
+  const to = commitFixtureRepo(repoPath, "Add checkout confirmation behavior");
+
+  return { repoPath, from, to };
 }
 
 function validateAgainstSchema(jsonPath) {
@@ -76,6 +220,7 @@ function assertConcreteVerificationSteps(steps, label) {
         "write",
         "keep",
         "add",
+        "create",
         "resolve",
         "reduce",
         "scan",
@@ -261,10 +406,62 @@ function assertProductContract(output, fixture) {
   throw new Error(`Unsupported output mode for product contract: ${output.mode}`);
 }
 
+function assertQualityEvaluationPasses(output, fixture) {
+  const evaluation = evaluateOutputQuality(output);
+  const failedChecks = evaluation.checks
+    .filter((check) => check.status === "fail")
+    .map((check) => `${check.id}: ${check.title}`);
+
+  assert.equal(
+    evaluation.status,
+    "pass",
+    `${fixture.id} should pass output quality evaluation.\n${failedChecks.join("\n")}`
+  );
+}
+
+function assertLiveCommitRangeCoverage(output, fixture, repoPath) {
+  assert.equal(
+    output.repoPath,
+    repoPath,
+    `${fixture.id} should report the generated live fixture repo.`
+  );
+  assert.match(
+    output.commitRange,
+    /^[a-f0-9]{40}\.\.[a-f0-9]{40}$/i,
+    `${fixture.id} should analyze a real commit range.`
+  );
+
+  const changeInterpretation =
+    output.mode === "paired_session" ? output.changeInterpretation : output;
+  const changedPaths = changeInterpretation.readingOrder.map((item) => item.path);
+
+  assert.ok(
+    changedPaths.includes("index.html"),
+    `${fixture.id} should include the changed HTML entry surface.`
+  );
+  assert.ok(
+    changedPaths.includes("styles.css"),
+    `${fixture.id} should include the changed presentation layer.`
+  );
+  assert.ok(
+    changedPaths.includes("js/app.js"),
+    `${fixture.id} should include the added behavior file.`
+  );
+  assert.ok(
+    changeInterpretation.keyThemes.includes("frontend_behavior"),
+    `${fixture.id} should detect frontend behavior from the live diff.`
+  );
+  assert.ok(
+    changeInterpretation.keyThemes.includes("visual_design"),
+    `${fixture.id} should detect presentation work from the live diff.`
+  );
+}
+
 for (const fixture of fixtures) {
   test(fixture.id, () => {
     let jsonPath;
     let parsed;
+    let liveRepoPath;
 
     if (fixture.type === "cli_output") {
       const stdout = runNode(fixture.args);
@@ -275,11 +472,33 @@ for (const fixture of fixtures) {
       jsonPath = path.join(repoRoot, fixture.path);
       parsed = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
       assert.equal(parsed.mode, fixture.expectedMode);
+    } else if (fixture.type === "live_commit_range") {
+      const { repoPath, from, to } = createLiveCommitRangeFixtureRepo(fixture.id);
+      liveRepoPath = repoPath;
+      const stdout = runNode([
+        "src/index.mjs",
+        "--repo",
+        repoPath,
+        "--from",
+        from,
+        "--to",
+        to,
+        "--mode",
+        fixture.mode,
+      ]);
+      parsed = JSON.parse(stdout);
+      assert.equal(parsed.mode, fixture.expectedMode);
+      jsonPath = writeTempJson(fixture.id, JSON.stringify(parsed, null, 2));
     } else {
       throw new Error(`Unsupported fixture type: ${fixture.type}`);
     }
 
     validateAgainstSchema(jsonPath);
     assertProductContract(parsed, fixture);
+    assertQualityEvaluationPasses(parsed, fixture);
+
+    if (fixture.type === "live_commit_range") {
+      assertLiveCommitRangeCoverage(parsed, fixture, liveRepoPath);
+    }
   });
 }
