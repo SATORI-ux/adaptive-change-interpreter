@@ -723,6 +723,29 @@ function assertProjectHealthReviewContract(projectHealthReview, label) {
 }
 
 function assertProductContract(output, fixture) {
+  if (output.mode === "feature_timeline") {
+    assert.equal(output.mode, "feature_timeline");
+    assert.ok(
+      Array.isArray(output.candidateRanges),
+      `${fixture.id} should include candidate ranges.`
+    );
+    assert.ok(
+      output.candidateRanges.length > 0,
+      `${fixture.id} should find at least one candidate range.`
+    );
+
+    for (const candidate of output.candidateRanges) {
+      assertNonEmptyString(candidate.range, `${fixture.id} candidates need ranges.`);
+      assertNonEmptyString(candidate.label, `${fixture.id} candidates need labels.`);
+      assertNonEmptyString(candidate.readingReason, `${fixture.id} candidates need reading reasons.`);
+      assert.ok(
+        Array.isArray(candidate.whyThisRange) && candidate.whyThisRange.length > 0,
+        `${fixture.id} candidates should explain why the range is useful.`
+      );
+    }
+    return;
+  }
+
   if (output.mode === "change_interpretation") {
     assertChangeInterpretationContract(output, fixture.id);
     return;
@@ -749,6 +772,10 @@ function assertProductContract(output, fixture) {
 }
 
 function assertQualityEvaluationPasses(output, fixture) {
+  if (output.mode === "feature_timeline") {
+    return;
+  }
+
   const evaluation = evaluateOutputQuality(output);
   const failedChecks = evaluation.checks
     .filter((check) => check.status === "fail")

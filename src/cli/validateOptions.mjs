@@ -1,7 +1,8 @@
 const VALID_MODES = new Set([
   "change_interpretation",
   "project_health_review",
-  "paired_session"
+  "paired_session",
+  "feature_timeline"
 ]);
 
 const VALID_DEPTHS = new Set(["level_1", "level_2"]);
@@ -28,5 +29,20 @@ export function validateOptions(options = {}) {
     throw new Error(
       `Unsupported "--format" value: ${options.format}. Use one of: ${formatAllowedValues(VALID_FORMATS)}.`
     );
+  }
+
+  if (
+    options.maxCommits &&
+    options.maxCommits !== "all" &&
+    (!/^\d+$/.test(options.maxCommits) || Number(options.maxCommits) < 1)
+  ) {
+    throw new Error('Unsupported "--max-commits" value. Use a positive number or "all".');
+  }
+
+  if (
+    options.limit &&
+    (!/^\d+$/.test(options.limit) || Number(options.limit) < 1)
+  ) {
+    throw new Error('Unsupported "--limit" value. Use a positive number.');
   }
 }

@@ -96,5 +96,12 @@
     "description": "Validates the saved paired-session sample output fixture.",
     "path": "examples/latest-output.json",
     "expectedMode": "paired_session"
+  },
+  {
+    "id": "self_repo_feature_timeline",
+    "type": "cli_output",
+    "description": "Runs the CLI against this repository in feature timeline mode.",
+    "args": ["src/index.mjs", "--repo", ".", "--mode", "feature_timeline", "--max-commits", "25", "--limit", "5"],
+    "expectedMode": "feature_timeline"
   }
 ]

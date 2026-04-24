@@ -186,6 +186,27 @@ function renderMetadata(output = {}) {
   return lines;
 }
 
+function renderFeatureTimeline(output, level = 1) {
+  const candidateLines = numberedList(output.candidateRanges, (candidate) => {
+    if (!candidate) {
+      return null;
+    }
+
+    const why = asArray(candidate.whyThisRange).join(" ");
+    const files = asArray(candidate.changedFiles).slice(0, 6).map(code).join(", ");
+    const subject = candidate.commit?.subject ? ` ${candidate.commit.subject}.` : "";
+    return `${candidate.label} (${candidate.confidence}, score ${candidate.score}) - ${code(candidate.range)}.${subject} ${candidate.readingReason} Themes: ${asArray(candidate.themes).join(", ")}. Files: ${files}. Why: ${why}`;
+  });
+
+  return [
+    heading(level, "Feature Timeline"),
+    "",
+    ...section("Review Note", paragraph(output.reviewNote), level + 1),
+    ...section("Scanned Commits", paragraph(String(output.scannedCommits || 0)), level + 1),
+    ...section("Candidate Ranges", candidateLines, level + 1)
+  ];
+}
+
 export function renderMarkdown(output = {}) {
   let lines;
 
@@ -209,6 +230,12 @@ export function renderMarkdown(output = {}) {
       "",
       ...renderChangeInterpretation(output.changeInterpretation || {}, 2),
       ...renderProjectHealthReview(output.projectHealthReview || {}, 2)
+    ];
+  } else if (output.mode === "feature_timeline") {
+    lines = [
+      ...renderMetadata(output),
+      "",
+      ...renderFeatureTimeline(output)
     ];
   } else {
     throw new Error(`Unsupported output mode for markdown rendering: ${output.mode || "missing"}`);

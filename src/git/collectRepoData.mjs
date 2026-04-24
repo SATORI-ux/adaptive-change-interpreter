@@ -2,15 +2,16 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-function runGitCommand(repoPath, command) {
+export function runGitCommand(repoPath, command) {
   try {
-    return execSync(`git -C "${repoPath}" ${command}`, {
+    return execSync(`git ${command}`, {
+      cwd: repoPath,
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
   } catch (error) {
     const stderr = error.stderr?.toString()?.trim() || "Unknown Git error";
-    throw new Error(`Git command failed: git -C "${repoPath}" ${command}\n${stderr}`);
+    throw new Error(`Git command failed in ${repoPath}: git ${command}\n${stderr}`);
   }
 }
 
@@ -18,7 +19,8 @@ function tryGitCommand(repoPath, command) {
   try {
     return {
       ok: true,
-      stdout: execSync(`git -C "${repoPath}" ${command}`, {
+      stdout: execSync(`git ${command}`, {
+        cwd: repoPath,
         encoding: "utf8",
         stdio: ["pipe", "pipe", "pipe"],
       }).trim()
@@ -312,17 +314,9 @@ function collectRepoEvidence(repoPath, trackedFiles, changedFiles, commitRange, 
   };
 }
 
-export function collectRepoData({ repo, from, to, mode }) {
+export function resolveGitRepoPath(repo) {
   if (!repo) {
     throw new Error('Missing required "--repo" argument.');
-  }
-
-  if (!from && mode !== "project_health_review") {
-    throw new Error('Missing required "--from" argument.');
-  }
-
-  if (!to && mode !== "project_health_review") {
-    throw new Error('Missing required "--to" argument.');
   }
 
   if (!fs.existsSync(repo)) {
@@ -332,6 +326,12 @@ export function collectRepoData({ repo, from, to, mode }) {
   const absoluteRepoPath = path.resolve(repo);
 
   const gitRepoCheck = tryGitCommand(absoluteRepoPath, "rev-parse --is-inside-work-tree");
+  if (!gitRepoCheck.ok && !gitRepoCheck.stderr && gitRepoCheck.message) {
+    throw new Error(
+      `Unable to run Git while checking repo path: ${absoluteRepoPath}. ${gitRepoCheck.message}`
+    );
+  }
+
   if (!gitRepoCheck.ok || gitRepoCheck.stdout !== "true") {
     const details = gitRepoCheck.stderr ? ` Git said: ${gitRepoCheck.stderr}` : "";
     const suggestions = formatGitRootSuggestions(absoluteRepoPath);
@@ -340,6 +340,20 @@ export function collectRepoData({ repo, from, to, mode }) {
       `Use the folder that contains the repository's .git directory, or clone the repo first.${suggestions}${details}`
     );
   }
+
+  return absoluteRepoPath;
+}
+
+export function collectRepoData({ repo, from, to, mode }) {
+  if (!from && mode !== "project_health_review") {
+    throw new Error('Missing required "--from" argument.');
+  }
+
+  if (!to && mode !== "project_health_review") {
+    throw new Error('Missing required "--to" argument.');
+  }
+
+  const absoluteRepoPath = resolveGitRepoPath(repo);
 
   const commitRange = from && to ? `${from}..${to}` : null;
 

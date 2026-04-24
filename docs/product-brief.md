@@ -24,7 +24,7 @@ Near-term feature decisions should therefore preserve:
 ## Planned direction
 The next major product capability should help users choose useful commit ranges before asking for a full interpretation.
 
-Working idea: an "insightful ranges" mode that scans recent Git history and recommends SHA ranges likely to reveal meaningful application behavior, feature additions, boundary changes, or architecture-relevant decisions. This should remain heuristic and evidence-based; it should recommend promising ranges rather than claim complete feature discovery.
+Working idea: a `feature_timeline` mode that scans recent Git history and recommends SHA ranges likely to reveal meaningful application behavior, feature additions, boundary changes, or architecture-relevant decisions. This should remain heuristic and evidence-based; it should recommend promising ranges rather than claim complete feature discovery.
 
 ## Core principle
 Prioritize:

@@ -6,7 +6,8 @@
   "oneOf": [
     { "$ref": "#/definitions/changeInterpretationResponse" },
     { "$ref": "#/definitions/projectHealthReviewResponse" },
-    { "$ref": "#/definitions/pairedSessionResponse" }
+    { "$ref": "#/definitions/pairedSessionResponse" },
+    { "$ref": "#/definitions/featureTimelineResponse" }
   ],
   "definitions": {
     "confidence": {
@@ -289,6 +290,84 @@
         "projectHealthReview": {
           "$ref": "#/definitions/projectHealthReviewResponse"
         }
+      }
+    },
+    "featureTimelineCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "range",
+        "from",
+        "to",
+        "commit",
+        "label",
+        "score",
+        "confidence",
+        "themes",
+        "changedFiles",
+        "whyThisRange",
+        "recommendedMode",
+        "readingReason",
+        "diffStat"
+      ],
+      "properties": {
+        "range": { "type": "string" },
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "commit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sha", "subject"],
+          "properties": {
+            "sha": { "type": "string" },
+            "subject": { "type": "string" }
+          }
+        },
+        "label": { "type": "string" },
+        "score": { "type": "number" },
+        "confidence": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "themes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "changedFiles": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "whyThisRange": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "recommendedMode": { "type": "string" },
+        "readingReason": { "type": "string" },
+        "diffStat": { "type": "string" }
+      }
+    },
+    "featureTimelineResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "repoPath",
+        "scannedCommits",
+        "candidateRanges",
+        "reviewNote"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "const": "feature_timeline"
+        },
+        "repoPath": { "type": "string" },
+        "scannedCommits": { "type": "integer" },
+        "candidateRanges": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/featureTimelineCandidate" }
+        },
+        "reviewNote": { "type": "string" }
       }
     }
   }

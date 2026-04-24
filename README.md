@@ -55,6 +55,12 @@ Project health review:
 node src/index.mjs --repo <repo-path> --mode project_health_review
 ```
 
+Feature timeline, recommending commit ranges likely to be useful for deeper interpretation:
+
+```powershell
+node src/index.mjs --repo <repo-path> --mode feature_timeline --max-commits <count> --limit <count>
+```
+
 Change interpretation for a commit range:
 
 ```powershell
@@ -120,6 +126,7 @@ node src/index.mjs --repo <repo-path> --from <older-commit-sha> --to <newer-comm
 ## Notes For This Stage
 
 - `project_health_review` does not require `--from` or `--to`.
+- `feature_timeline` does not require `--from` or `--to`; use `--max-commits` and `--limit` to control how much history it scans and returns.
 - `change_interpretation` and `paired_session` require both `--from` and `--to`.
 - Output is JSON so it can be validated, saved, compared, or used as a fixture.
 - Use `--format markdown` for human-readable output; JSON remains the default.

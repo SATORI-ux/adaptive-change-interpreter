@@ -6,6 +6,7 @@ import { classifyFiles } from "./analyze/classifyFiles.mjs";
 import { detectRiskSignals } from "./analyze/detectRiskSignals.mjs";
 import { buildChangeInterpretation } from "./analyze/buildChangeInterpretation.mjs";
 import { buildProjectHealthReview } from "./analyze/buildProjectHealthReview.mjs";
+import { buildFeatureTimeline } from "./analyze/buildFeatureTimeline.mjs";
 import { renderMarkdown } from "./render/renderMarkdown.mjs";
 import { validateOptions } from "./cli/validateOptions.mjs";
 
@@ -35,6 +36,16 @@ program
   .option(
     "--output <path>",
     "Write output to a file instead of stdout"
+  )
+  .option(
+    "--max-commits <count>",
+    "Maximum recent commits to scan for feature_timeline mode",
+    "50"
+  )
+  .option(
+    "--limit <count>",
+    "Maximum feature_timeline candidate ranges to return",
+    "8"
   );
 
 program.parse();
@@ -44,7 +55,12 @@ const options = program.opts();
 try {
   validateOptions(options);
 
-  const repoData = collectRepoData(options);
+  let output;
+
+  if (options.mode === "feature_timeline") {
+    output = buildFeatureTimeline(options);
+  } else {
+    const repoData = collectRepoData(options);
   const classifiedChangedFiles = classifyFiles(repoData.changedFiles);
   const classifiedTrackedFiles = classifyFiles(repoData.trackedFiles);
   const riskSignals = detectRiskSignals(
@@ -68,8 +84,6 @@ try {
     riskSignals
   );
 
-  let output;
-
   if (options.mode === "change_interpretation") {
     output = changeInterpretation;
   } else if (options.mode === "project_health_review") {
@@ -82,6 +96,7 @@ try {
       changeInterpretation,
       projectHealthReview
     };
+  }
   }
 
   const renderedOutput = options.format === "json"
