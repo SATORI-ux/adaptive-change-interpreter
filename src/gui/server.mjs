@@ -3,9 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runAnalysis } from "../analyze/runAnalysis.mjs";
+import { resolveGitRepoPath, runGitCommand } from "../git/collectRepoData.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
+const modulePath = fileURLToPath(import.meta.url);
 const defaultPort = Number(process.env.PORT || 4731);
 const portArgIndex = process.argv.indexOf("--port");
 const port = portArgIndex >= 0
@@ -77,6 +79,11 @@ function isGitRepo(directoryPath) {
   return fs.existsSync(path.join(directoryPath, ".git"));
 }
 
+function resolveGitRoot(inputPath) {
+  const repoPath = resolveGitRepoPath(inputPath);
+  return runGitCommand(repoPath, "rev-parse --show-toplevel");
+}
+
 function getRepoLabel(repoPath) {
   const packageJsonPath = path.join(repoPath, "package.json");
 
@@ -95,21 +102,8 @@ function getRepoLabel(repoPath) {
   return path.basename(repoPath);
 }
 
-function getRepoInfo(inputPath) {
-  const repoPath = getBrowseRoot(inputPath);
-
-  if (!fs.existsSync(repoPath)) {
-    throw new Error(`Folder does not exist: ${repoPath}`);
-  }
-
-  const stat = fs.statSync(repoPath);
-  if (!stat.isDirectory()) {
-    throw new Error(`Path is not a folder: ${repoPath}`);
-  }
-
-  if (!isGitRepo(repoPath)) {
-    throw new Error(`Folder is not a Git repository: ${repoPath}`);
-  }
+export function getRepoInfo(inputPath) {
+  const repoPath = resolveGitRoot(getBrowseRoot(inputPath));
 
   return {
     path: repoPath,
@@ -152,14 +146,25 @@ function browseDirectory(inputPath) {
   };
 }
 
+export function resolvePublicPath(requestPath) {
+  const requestedPath = requestPath === "/"
+    ? "/index.html"
+    : decodeURIComponent(requestPath);
+  const absolutePath = path.resolve(publicDir, `.${requestedPath}`);
+  const relativePath = path.relative(publicDir, absolutePath);
+
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    return null;
+  }
+
+  return absolutePath;
+}
+
 function serveStatic(request, response) {
   const requestUrl = new URL(request.url, `http://${request.headers.host}`);
-  const requestedPath = requestUrl.pathname === "/"
-    ? "/index.html"
-    : decodeURIComponent(requestUrl.pathname);
-  const absolutePath = path.resolve(publicDir, `.${requestedPath}`);
+  const absolutePath = resolvePublicPath(requestUrl.pathname);
 
-  if (!absolutePath.startsWith(publicDir)) {
+  if (!absolutePath) {
     response.writeHead(403);
     response.end("Forbidden");
     return;
@@ -179,7 +184,7 @@ function serveStatic(request, response) {
   });
 }
 
-const server = http.createServer(async (request, response) => {
+export const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url, `http://${request.headers.host}`);
 
   if (request.method === "GET" && requestUrl.pathname === "/api/defaults") {
@@ -241,7 +246,50 @@ const server = http.createServer(async (request, response) => {
   response.end("Method not allowed");
 });
 
-server.listen(port, "127.0.0.1", () => {
-  const url = `http://localhost:${port}`;
-  process.stdout.write(`Adaptive Change Interpreter GUI: ${url}\n`);
-});
+export function startServer({ listenPort = port, host = "127.0.0.1" } = {}) {
+  return new Promise((resolve, reject) => {
+    function onError(error) {
+      server.off("listening", onListening);
+      reject(error);
+    }
+
+    function onListening() {
+      server.off("error", onError);
+      resolve(server);
+    }
+
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(listenPort, host);
+  });
+}
+
+export function stopServer() {
+  return new Promise((resolve, reject) => {
+    if (!server.listening) {
+      resolve();
+      return;
+    }
+
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
+if (process.argv[1] === modulePath) {
+  startServer()
+    .then(() => {
+      const url = `http://localhost:${port}`;
+      process.stdout.write(`Adaptive Change Interpreter GUI: ${url}\n`);
+    })
+    .catch((error) => {
+      console.error(error);
+      process.exit(1);
+    });
+}
