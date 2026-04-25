@@ -5,7 +5,8 @@ const state = {
   repoPath: null,
   repoLabel: null,
   timelineCandidates: [],
-  timelineRepo: null
+  timelineRepo: null,
+  selectedCandidateRange: null
 };
 
 const elements = {
@@ -26,6 +27,7 @@ const elements = {
   run: document.querySelector("#runButton"),
   status: document.querySelector("#statusText"),
   output: document.querySelector("#output"),
+  selectedRange: document.querySelector("#selectedRange"),
   candidateList: document.querySelector("#candidateList"),
   candidateCount: document.querySelector("#candidateCount"),
   segments: [...document.querySelectorAll(".segment")]
@@ -76,6 +78,8 @@ function updateDepthHelp() {
 function clearTimelineCandidates() {
   state.timelineCandidates = [];
   state.timelineRepo = null;
+  state.selectedCandidateRange = null;
+  renderSelectedRange();
   renderCandidates();
 }
 
@@ -387,6 +391,112 @@ function renderMetadata(output) {
     : "";
 }
 
+function getSelectedCandidate() {
+  if (!state.selectedCandidateRange) {
+    return null;
+  }
+
+  return state.timelineCandidates.find(
+    (candidate) => candidate.range === state.selectedCandidateRange
+  ) || null;
+}
+
+function selectCandidate(candidate) {
+  state.selectedCandidateRange = candidate?.range || null;
+
+  if (candidate) {
+    elements.from.value = candidate.from;
+    elements.to.value = candidate.to;
+  }
+
+  renderSelectedRange();
+  renderCandidates();
+}
+
+function syncSelectedCandidateFromRange(from, to) {
+  const range = from && to ? `${from}..${to}` : null;
+
+  if (!range) {
+    return;
+  }
+
+  const matchingCandidate = state.timelineCandidates.find(
+    (candidate) => candidate.range === range
+  );
+
+  state.selectedCandidateRange = matchingCandidate?.range || null;
+  renderSelectedRange();
+  renderCandidates();
+}
+
+function renderSelectedRange() {
+  const candidate = getSelectedCandidate();
+
+  if (!candidate) {
+    elements.selectedRange.classList.add("is-empty");
+    elements.selectedRange.innerHTML = `
+      <span>Selected range</span>
+      <p>No range selected.</p>
+    `;
+    return;
+  }
+
+  elements.selectedRange.classList.remove("is-empty");
+  elements.selectedRange.innerHTML = `
+    <span>Selected range</span>
+    <strong>${escapeHtml(candidate.title || candidate.label)}</strong>
+    <p>${escapeHtml(compactSha(candidate.from))}..${escapeHtml(compactSha(candidate.to))}</p>
+    ${candidate.titleConfidence ? `<small>${escapeHtml(candidate.titleConfidence.level)} title · ${escapeHtml(candidate.titleConfidence.score)}/100</small>` : ""}
+  `;
+}
+
+function activatePairedTab(tabName) {
+  document.querySelectorAll(".paired-tab").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.tab === tabName);
+  });
+  document.querySelectorAll(".paired-panel").forEach((panel) => {
+    panel.hidden = panel.dataset.panel !== tabName;
+  });
+}
+
+function bindPairedTabs() {
+  document.querySelectorAll(".paired-tab").forEach((button) => {
+    button.addEventListener("click", () => {
+      activatePairedTab(button.dataset.tab);
+    });
+  });
+}
+
+function renderPairedSession(output) {
+  const selectedCandidate = getSelectedCandidate();
+  const selectedSummary = selectedCandidate
+    ? `<p class="paired-context">Selected range: <strong>${escapeHtml(selectedCandidate.title || selectedCandidate.label)}</strong></p>`
+    : "";
+
+  return `
+    ${renderMetadata(output)}
+    <section class="paired-shell">
+      <div class="paired-header">
+        <div>
+          <h2>Paired Session</h2>
+          ${selectedSummary}
+        </div>
+        <div class="paired-tabs" role="tablist" aria-label="Paired session sections">
+          <button class="paired-tab is-active" type="button" data-tab="change">Change Interpretation</button>
+          <button class="paired-tab" type="button" data-tab="context">Project Context</button>
+        </div>
+      </div>
+      <section class="paired-panel" data-panel="change">
+        ${renderChangeInterpretation(output.changeInterpretation || {})}
+      </section>
+      <section class="paired-panel" data-panel="context" hidden>
+        <p class="paired-context-note">Repo-wide context for judging the selected change range.</p>
+        ${renderProjectHealth(output.projectHealthReview || {})}
+      </section>
+    </section>
+  `;
+}
+
 function renderOutput(output) {
   state.lastOutput = output;
 
@@ -397,20 +507,10 @@ function renderOutput(output) {
   }
 
   if (output.mode === "paired_session") {
-    elements.output.innerHTML = `
-      ${renderMetadata(output)}
-      <h2>Paired Session</h2>
-      <div class="two-column">
-        <div>
-          <h3>Change Interpretation</h3>
-          ${renderChangeInterpretation(output.changeInterpretation || {})}
-        </div>
-        <div>
-          <h3>Project Health Review</h3>
-          ${renderProjectHealth(output.projectHealthReview || {})}
-        </div>
-      </div>
-    `;
+    const [from, to] = String(output.commitRange || "").split("..");
+    syncSelectedCandidateFromRange(from, to);
+    elements.output.innerHTML = renderPairedSession(output);
+    bindPairedTabs();
     return;
   }
 
@@ -441,24 +541,48 @@ function renderCandidates() {
     return;
   }
 
-  elements.candidateList.innerHTML = candidates.map((candidate, index) => `
-    <button class="candidate-card" type="button" data-index="${index}">
-      <strong>${escapeHtml(candidate.title || candidate.label)}</strong>
-      <span>${escapeHtml(compactSha(candidate.from))}..${escapeHtml(compactSha(candidate.to))}</span>
-      ${candidate.titleConfidence ? `<small>${escapeHtml(candidate.titleConfidence.level)} title · ${escapeHtml(candidate.titleConfidence.score)}/100</small>` : ""}
-      <small>${escapeHtml(candidate.readingReason)}</small>
-    </button>
-  `).join("");
+  elements.candidateList.innerHTML = candidates.map((candidate, index) => {
+    const isSelected = candidate.range === state.selectedCandidateRange;
+
+    return `
+      <article class="candidate-item ${isSelected ? "is-selected" : ""}">
+        <button class="candidate-card" type="button" data-index="${index}">
+          <strong>${escapeHtml(candidate.title || candidate.label)}</strong>
+          <span>${escapeHtml(compactSha(candidate.from))}..${escapeHtml(compactSha(candidate.to))}</span>
+          ${candidate.titleConfidence ? `<small>${escapeHtml(candidate.titleConfidence.level)} title · ${escapeHtml(candidate.titleConfidence.score)}/100</small>` : ""}
+          <small>${escapeHtml(candidate.readingReason)}</small>
+        </button>
+        ${isSelected ? `<button class="run-selected-inline" type="button" data-run-index="${index}">Run Selected Range</button>` : ""}
+      </article>
+    `;
+  }).join("");
 
   elements.candidateList.querySelectorAll(".candidate-card").forEach((card) => {
     card.addEventListener("click", () => {
       const candidate = candidates[Number(card.dataset.index)];
-      elements.from.value = candidate.from;
-      elements.to.value = candidate.to;
-      setMode("paired_session");
-      runAnalysis();
+      selectCandidate(candidate);
     });
   });
+
+  elements.candidateList.querySelectorAll(".run-selected-inline").forEach((button) => {
+    button.addEventListener("click", () => {
+      const candidate = candidates[Number(button.dataset.runIndex)];
+      selectCandidate(candidate);
+      runSelectedRange();
+    });
+  });
+}
+
+function runSelectedRange() {
+  const candidate = getSelectedCandidate();
+
+  if (!candidate) {
+    return;
+  }
+
+  selectCandidate(candidate);
+  setMode("paired_session");
+  runAnalysis();
 }
 
 function buildPayload() {
@@ -510,6 +634,7 @@ async function runAnalysis() {
     setStatus("Error");
   } finally {
     elements.run.disabled = false;
+    renderSelectedRange();
   }
 }
 

@@ -38,12 +38,23 @@ function selectRepresentativeProjectPaths(paths = [], limit = 3) {
 }
 
 function getReadmeSummary(readmeExcerpt = "") {
-  const cleaned = readmeExcerpt
+  const paragraphs = readmeExcerpt
     .replace(/\r/g, "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !line.startsWith("#"))
+    .split(/\n{2,}/)
+    .map((paragraph) =>
+      paragraph
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .filter((line) => !line.startsWith("#"))
+        .filter((line) => !line.startsWith("- "))
+        .join(" ")
+        .trim()
+    )
+    .filter(Boolean);
+  const cleaned = paragraphs
+    .filter((paragraph) => !paragraph.endsWith(":"))
+    .slice(0, 2)
     .join(" ");
 
   if (!cleaned) {
@@ -129,18 +140,18 @@ function detectSystems(repoData, classifiedTrackedFiles) {
   if (hasFrontendSurface) {
     const entryFiles = selectRepresentativeProjectPaths(evidence.frontendEntryFiles || [], 3);
     const entryLabel = entryFiles.length > 0
-      ? `Frontend entry points are visible in ${entryFiles.join(", ")}.`
+      ? `Frontend surface: ${entryFiles.join(", ")}.`
       : "Tracked HTML and JavaScript files indicate a frontend surface.";
     systems.push(entryLabel);
   }
 
   if (getCategoryCount(counts, "styling") > 0) {
-    systems.push("Styling files are separated from core behavior files, making visual changes easier to inspect apart from interaction logic.");
+    systems.push("Presentation has a separate styling layer.");
   }
 
   if (hasAnalysisEngine) {
     systems.push(
-      `The interpretation pipeline is concentrated in ${selectRepresentativeProjectPaths(evidence.analysisEngineFiles || findFilesByCategory(classifiedTrackedFiles, "analysis_engine"), 4).join(", ")}.`
+      `Analysis pipeline: ${selectRepresentativeProjectPaths(evidence.analysisEngineFiles || findFilesByCategory(classifiedTrackedFiles, "analysis_engine"), 3).join(", ")}.`
     );
   }
 
@@ -164,17 +175,17 @@ function detectSystems(repoData, classifiedTrackedFiles) {
 
   if (evidence.sourceOfTruthDocFiles?.length > 0) {
     systems.push(
-      `Product and evaluation guidance is tracked in ${selectRepresentativeProjectPaths(evidence.sourceOfTruthDocFiles, 4).join(", ")}.`
+      `Product and evaluation guidance: ${selectRepresentativeProjectPaths(evidence.sourceOfTruthDocFiles, 3).join(", ")}.`
     );
   }
 
   if (evidence.pipelineSupportFiles?.length > 0) {
     systems.push(
-      `Schemas and examples in ${selectRepresentativeProjectPaths(evidence.pipelineSupportFiles, 3).join(", ")} give the analysis output a checkable contract.`
+      `Output contract support: ${selectRepresentativeProjectPaths(evidence.pipelineSupportFiles, 2).join(", ")}.`
     );
   }
 
-  return systems;
+  return systems.slice(0, 4);
 }
 
 function inferProjectStage(repoData, classifiedTrackedFiles, riskSignals) {
@@ -229,7 +240,7 @@ function buildProjectSummary(repoData, classifiedTrackedFiles) {
   const stage = inferProjectStage(repoData, classifiedTrackedFiles, []);
   const paragraphs = [
     identity.summary,
-    `Tracked shape: ${repoData.trackedFiles.length} file(s), with the strongest visible areas being ${categorySummary || "no strong file-category pattern detected yet"}.`
+    `Tracked shape: ${repoData.trackedFiles.length} file(s). Strongest visible areas: ${categorySummary || "no strong file-category pattern detected yet"}.`
   ];
 
   if (systems.length > 0) {

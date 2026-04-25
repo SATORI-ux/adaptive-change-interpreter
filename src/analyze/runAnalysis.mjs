@@ -31,10 +31,25 @@ export function runAnalysis(options = {}) {
     }
   );
 
+  const projectRepoData = options.mode === "paired_session"
+    ? collectRepoData({
+        ...options,
+        mode: "project_health_review",
+        from: undefined,
+        to: undefined
+      })
+    : repoData;
+  const projectClassifiedTrackedFiles = options.mode === "paired_session"
+    ? classifyFiles(projectRepoData.trackedFiles)
+    : classifiedTrackedFiles;
+  const projectRiskSignals = options.mode === "paired_session"
+    ? detectRiskSignals(projectRepoData, classifyFiles([]), projectClassifiedTrackedFiles)
+    : riskSignals;
+
   const projectHealthReview = buildProjectHealthReview(
-    repoData,
-    classifiedTrackedFiles,
-    riskSignals
+    projectRepoData,
+    projectClassifiedTrackedFiles,
+    projectRiskSignals
   );
 
   if (options.mode === "change_interpretation") {

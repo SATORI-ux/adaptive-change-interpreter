@@ -22,7 +22,17 @@ function findEnvLikeTrackedFiles(trackedFiles = []) {
 
 function findHardcodedUrls(text = "") {
   const matches = text.match(/https?:\/\/[^\s"'`<>]+/g) || [];
-  return [...new Set(matches)];
+  return [...new Set(matches)].filter((url) => {
+    const normalized = url.toLowerCase();
+
+    return !(
+      normalized.includes("${") ||
+      normalized.startsWith("http://localhost") ||
+      normalized.startsWith("https://localhost") ||
+      normalized.startsWith("http://127.0.0.1") ||
+      normalized.startsWith("https://127.0.0.1")
+    );
+  });
 }
 
 function normalizePath(filePath = "") {

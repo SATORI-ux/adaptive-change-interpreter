@@ -41,6 +41,11 @@ Run a failure pass on the change.
 - hardcoded values
 - deployment mismatch
 
+6. GUI output quality drift
+- GUI requests should exercise the same output quality expectations as CLI flows
+- Timeline candidates should remain selectable and meaningfully titled
+- Paired-session output from a selected Timeline range should have no hard quality-evaluator failures
+
 ---
 
 ## Output format

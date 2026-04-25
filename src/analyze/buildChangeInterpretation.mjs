@@ -117,6 +117,26 @@ function describeRepresentativePaths(paths = [], fallback = "the changed files")
   return representativePaths.join(", ");
 }
 
+function getRepresentativeCategoryPaths(classifiedChangedFiles, category, limit = 3) {
+  return selectRepresentativePaths(
+    (classifiedChangedFiles.files || [])
+      .filter((file) => file.category === category)
+      .map((file) => file.path)
+  ).slice(0, limit);
+}
+
+function getPrivateOrGatedPaths(paths = []) {
+  return paths.filter((filePath) => {
+    const lower = filePath.toLowerCase();
+    return (
+      lower.includes("private") ||
+      lower.includes("kept") ||
+      lower.includes("protected") ||
+      lower.includes("guard")
+    );
+  });
+}
+
 function isGeneratedOrDerivedPath(filePath = "") {
   const lower = filePath.toLowerCase();
   return lower.startsWith("dist/") || lower.startsWith("build/");
@@ -302,7 +322,7 @@ function detectIntentSignals(repoData, classifiedChangedFiles) {
       label: "dark-mode or theme-system work",
       description:
         "The commit messages and changed files point to theme-system work across more than one interface surface.",
-      patterns: ["dark mode", "theme", "palette", "accent", "color-scheme", "--bg", "--surface"]
+      patterns: ["dark mode", "dark-theme", "theme", "palette"]
     },
     {
       id: "responsive_ui",
@@ -360,6 +380,15 @@ function detectIntentSignals(repoData, classifiedChangedFiles) {
 
       if (signal.id === "dark_mode" && ((counts.styling || 0) > 0 || combinedPathText.includes("theme"))) {
         score += 2;
+      }
+
+      if (
+        signal.id === "dark_mode" &&
+        !/\b(dark mode|dark-theme|theme|palette)\b/i.test(
+          `${combinedCommitText}\n${combinedDiffText}\n${combinedPathText}`
+        )
+      ) {
+        score = 0;
       }
 
       if (signal.id === "toggle_or_control" && combinedPathText.includes("theme")) {
@@ -514,7 +543,12 @@ function buildCodeShapeExplanation(repoData, classifiedChangedFiles, themes, dep
   const counts = classifiedChangedFiles.countsByCategory || {};
   const changedSnippets = repoData.evidence?.changedFileSnippets || [];
   const diffSnippets = repoData.evidence?.changedDiffSnippets || [];
-  const changedPaths = selectRepresentativePaths(changedSnippets.map((item) => item.path));
+  const signalBearingPaths = getSignalBearingImplementationPaths(classifiedChangedFiles);
+  const changedPaths = selectRepresentativePaths(
+    signalBearingPaths.length > 0
+      ? signalBearingPaths
+      : changedSnippets.map((item) => item.path)
+  );
   const diffPaths = selectRepresentativePaths(diffSnippets.map((item) => item.path));
   const intentSignals = detectIntentSignals(repoData, classifiedChangedFiles);
   const hasFrontend = (counts.frontend_app || 0) > 0;
@@ -535,9 +569,21 @@ function buildCodeShapeExplanation(repoData, classifiedChangedFiles, themes, dep
   }
 
   if (hasFrontend && hasBackend) {
-    return depthProfile.includeBoundaryContext
-      ? "The code shape crosses a system boundary. Follow the request or state transition from UI trigger to backend enforcement, then back to the visible result."
-      : "The code shape crosses a system boundary. Read the frontend and backend files as one flow, not as isolated edits.";
+    const frontendPaths = getRepresentativeCategoryPaths(classifiedChangedFiles, "frontend_app", 2);
+    const backendPaths = getRepresentativeCategoryPaths(classifiedChangedFiles, "backend", 2);
+    const boundaryLabel = [
+      frontendPaths.length > 0 ? `frontend surface (${frontendPaths.join(", ")})` : "frontend surface",
+      backendPaths.length > 0 ? `backend/API surface (${backendPaths.join(", ")})` : "backend/API surface"
+    ].join(" and ");
+    const privatePaths = getPrivateOrGatedPaths([...frontendPaths, ...backendPaths, ...repoData.changedFiles]);
+    const privateSentence = privatePaths.length > 0
+      ? ` Some changed paths look private or gated (${selectRepresentativePaths(privatePaths).join(", ")}), so compare what the public UI exposes with what the protected path enforces.`
+      : "";
+    const depthSentence = depthProfile.includeBoundaryContext
+      ? " Follow the request, state transition, or validation rule from UI trigger to trusted backend handling, then back to the visible result."
+      : " Read those files as one flow, not as isolated edits.";
+
+    return `The code shape crosses a concrete system boundary between ${boundaryLabel}.${privateSentence}${depthSentence}`;
   }
 
   if (hasBackground) {
@@ -732,9 +778,8 @@ function buildFeatureSpecificVerification(
     const lower = filePath.toLowerCase();
     return lower.endsWith(".html") && lower !== "index.html" && !lower.endsWith("/index.html");
   });
-  const hasThemeSignal = intentSignals.some(
-    (signal) => signal.id === "dark_mode" || signal.id === "toggle_or_control"
-  );
+  const hasThemeSignal = intentSignals.some((signal) => signal.id === "dark_mode");
+  const hasControlSignal = intentSignals.some((signal) => signal.id === "toggle_or_control");
   const hasResponsiveSignal = intentSignals.some((signal) => signal.id === "responsive_ui");
   const hasPrivateSignal = intentSignals.some((signal) => signal.id === "private_flow");
 
@@ -746,6 +791,10 @@ function buildFeatureSpecificVerification(
 
   if (hasThemeSignal) {
     checks.push("Toggle the theme-related control and confirm the state change is applied consistently across the main UI surfaces.");
+  }
+
+  if (hasControlSignal) {
+    checks.push("Use the changed control in the browser and confirm the visible state, labels, and follow-up action match the intended flow.");
   }
 
   if (hasResponsiveSignal) {
