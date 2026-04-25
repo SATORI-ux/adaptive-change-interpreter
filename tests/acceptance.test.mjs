@@ -851,6 +851,29 @@ function assertMarkdownCliOutput(repoPath, from, to, mode) {
   });
 }
 
+function getValueAtPath(target, dottedPath) {
+  return dottedPath.split(".").reduce((value, key) => value?.[key], target);
+}
+
+function assertExpectedIncludes(output, fixture) {
+  const expectations = fixture.expectedIncludes || [];
+
+  for (const expectation of expectations) {
+    const actualValue = getValueAtPath(output, expectation.path);
+    const haystack = Array.isArray(actualValue)
+      ? actualValue.join("\n")
+      : String(actualValue ?? "");
+
+    for (const snippet of expectation.includes || []) {
+      assert.match(
+        haystack.toLowerCase(),
+        new RegExp(snippet.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+        `${fixture.id} should include "${snippet}" at ${expectation.path}.`
+      );
+    }
+  }
+}
+
 for (const fixture of fixtures) {
   test(fixture.id, () => {
     let jsonPath;
@@ -893,6 +916,7 @@ for (const fixture of fixtures) {
     validateAgainstSchema(jsonPath);
     assertProductContract(parsed, fixture);
     assertQualityEvaluationPasses(parsed, fixture);
+    assertExpectedIncludes(parsed, fixture);
 
     if (fixture.type === "live_commit_range") {
       assertLiveCommitRangeCoverage(parsed, fixture, liveRepoPath);

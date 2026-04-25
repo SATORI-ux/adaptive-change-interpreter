@@ -89,14 +89,6 @@ function inferProjectIdentity(repoData) {
   const readmeSummary = getReadmeSummary(repoData.evidence?.readme?.excerpt || "");
   const sourceOfTruthDocs = repoData.evidence?.sourceOfTruthDocFiles || [];
 
-  if (sourceOfTruthDocs.length >= 3) {
-    return {
-      summary:
-        `The repository carries explicit product and review guidance in source-controlled docs such as ${selectRepresentativeProjectPaths(sourceOfTruthDocs, 3).join(", ")}, which suggests the project is trying to encode judgment standards directly into the repo.`,
-      source: "source_of_truth_docs"
-    };
-  }
-
   if (readmeSummary) {
     return {
       summary: `The README suggests this project is trying to do something specific rather than acting as a generic starter: ${readmeSummary}`,
@@ -109,6 +101,14 @@ function inferProjectIdentity(repoData) {
     return {
       summary: `The package description suggests the repo has a defined purpose: ${packageDescription}.`,
       source: "package_json"
+    };
+  }
+
+  if (sourceOfTruthDocs.length >= 3) {
+    return {
+      summary:
+        `The repository carries explicit product and review guidance in source-controlled docs such as ${selectRepresentativeProjectPaths(sourceOfTruthDocs, 3).join(", ")}, which suggests the project is trying to encode judgment standards directly into the repo.`,
+      source: "source_of_truth_docs"
     };
   }
 

@@ -49,10 +49,7 @@ function looksLikeAnalysisEnginePath(normalized, ext) {
     normalized.startsWith("src/analyze/") ||
     normalized.startsWith("src/git/") ||
     normalized === "src/index.mjs" ||
-    normalized === "src/validateschema.mjs" ||
-    hasPathToken(normalized, "interpret") ||
-    hasPathToken(normalized, "analyze") ||
-    hasPathToken(normalized, "schema")
+    normalized === "src/validateschema.mjs"
   );
 }
 

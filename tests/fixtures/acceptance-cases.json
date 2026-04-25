@@ -4,7 +4,25 @@
     "type": "cli_output",
     "description": "Runs the CLI against this repository in project health review mode.",
     "args": ["src/index.mjs", "--repo", ".", "--mode", "project_health_review"],
-    "expectedMode": "project_health_review"
+    "expectedMode": "project_health_review",
+    "expectedIncludes": [
+      {
+        "path": "projectOverview",
+        "includes": [
+          "interpreting code changes",
+          "analysis_engine",
+          "src/analyze",
+          "docs-as-source-of-truth"
+        ]
+      },
+      {
+        "path": "whatToVerifyNext",
+        "includes": [
+          "src/analyze",
+          "source-of-truth docs"
+        ]
+      }
+    ]
   },
   {
     "id": "live_commit_range_change_interpretation",
