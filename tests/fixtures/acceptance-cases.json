@@ -12,7 +12,7 @@
           "interpreting code changes",
           "analysis_engine",
           "src/analyze",
-          "docs-as-source-of-truth"
+          "product and evaluation guidance"
         ]
       },
       {
@@ -20,6 +20,24 @@
         "includes": [
           "src/analyze",
           "source-of-truth docs"
+        ]
+      }
+    ],
+    "expectedExcludes": [
+      {
+        "path": "projectOverview",
+        "excludes": [
+          "trying to do something specific",
+          "generic starter",
+          "this repository currently contains",
+          "the current repo evidence points to"
+        ]
+      },
+      {
+        "path": "whatIsWorkingWell",
+        "excludes": [
+          "a readable README",
+          "a readable package.json"
         ]
       }
     ]
@@ -32,7 +50,18 @@
     "mode": "change_interpretation",
     "expectedMode": "change_interpretation",
     "expectedChangedPaths": ["index.html", "styles.css", "js/app.js"],
-    "expectedThemes": ["frontend_behavior", "visual_design"]
+    "expectedThemes": ["frontend_behavior", "visual_design"],
+    "expectedExcludes": [
+      {
+        "path": "",
+        "excludes": [
+          "the code shape suggests",
+          "usually means",
+          "good candidate",
+          "useful if you want"
+        ]
+      }
+    ]
   },
   {
     "id": "live_commit_range_paired_session",
@@ -120,6 +149,18 @@
     "type": "cli_output",
     "description": "Runs the CLI against this repository in feature timeline mode.",
     "args": ["src/index.mjs", "--repo", ".", "--mode", "feature_timeline", "--max-commits", "25", "--limit", "5"],
-    "expectedMode": "feature_timeline"
+    "expectedMode": "feature_timeline",
+    "expectedExcludes": [
+      {
+        "path": "",
+        "excludes": [
+          "good candidate",
+          "useful if you want",
+          "less useful",
+          "commit subject uses",
+          "high-signal range"
+        ]
+      }
+    ]
   }
 ]

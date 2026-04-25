@@ -85,6 +85,16 @@ Render human-readable Markdown instead of JSON:
 node src/index.mjs --repo <repo-path> --from <from-ref> --to <to-ref> --mode paired_session --format markdown
 ```
 
+## Minimal Local GUI
+
+Start the local GUI:
+
+```powershell
+npm.cmd run gui
+```
+
+Then open the printed localhost URL. The GUI uses the same analysis pipeline as the CLI and renders the existing structured output for project health reviews, feature timeline candidates, paired sessions, and single change interpretations.
+
 ## Save Output
 
 Save JSON output:

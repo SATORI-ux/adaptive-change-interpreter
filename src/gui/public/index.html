@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Adaptive Change Interpreter</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>Adaptive Change Interpreter</h1>
+          <p id="statusText">Ready</p>
+        </div>
+        <button id="runButton" class="primary-button" type="button">Run</button>
+      </header>
+
+      <section class="control-band" aria-label="Analysis controls">
+        <label class="field repo-field">
+          <span>Repository</span>
+          <div class="repo-picker-row">
+            <input id="repoInput" name="repo" autocomplete="off" spellcheck="false">
+            <button id="browseButton" class="secondary-button" type="button">Browse</button>
+          </div>
+        </label>
+
+        <div class="field">
+          <span>Mode</span>
+          <div class="segmented" role="group" aria-label="Mode">
+            <button class="segment is-active" type="button" data-mode="project_health_review">Health</button>
+            <button class="segment" type="button" data-mode="feature_timeline">Timeline</button>
+            <button class="segment" type="button" data-mode="paired_session">Paired</button>
+            <button class="segment" type="button" data-mode="change_interpretation">Change</button>
+          </div>
+        </div>
+
+        <label class="field compact-field">
+          <span>Depth</span>
+          <select id="depthInput">
+            <option value="level_1">Level 1 - concise</option>
+            <option value="level_2">Level 2 - deeper</option>
+          </select>
+          <small id="depthHelp" class="field-help"></small>
+        </label>
+
+        <label class="field compact-field timeline-only">
+          <span>Commits</span>
+          <input id="maxCommitsInput" inputmode="numeric" value="50">
+        </label>
+
+        <label class="field compact-field timeline-only">
+          <span>Limit</span>
+          <input id="limitInput" inputmode="numeric" value="8">
+        </label>
+
+        <label class="field range-field range-only">
+          <span>From</span>
+          <input id="fromInput" autocomplete="off" spellcheck="false">
+        </label>
+
+        <label class="field range-field range-only">
+          <span>To</span>
+          <input id="toInput" autocomplete="off" spellcheck="false">
+        </label>
+      </section>
+
+      <section class="workspace">
+        <aside class="sidebar" aria-label="Timeline candidates">
+          <div class="panel-heading">
+            <h2>Candidates</h2>
+            <span id="candidateCount">0</span>
+          </div>
+          <div id="candidateList" class="candidate-list">
+            <p class="muted">Run Timeline to list candidate ranges.</p>
+          </div>
+        </aside>
+
+        <section class="output-pane" aria-live="polite">
+          <div id="output"></div>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="repoDialog" class="repo-dialog">
+      <div class="dialog-header">
+        <div>
+          <h2>Choose Repository</h2>
+          <p id="browsePath" class="muted"></p>
+        </div>
+        <button id="closeBrowseButton" class="icon-button" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="dialog-actions">
+        <button id="selectCurrentButton" class="primary-button" type="button">Choose This Folder</button>
+      </div>
+      <div id="browseMessage" class="browse-message"></div>
+      <div id="browseList" class="browse-list"></div>
+    </dialog>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

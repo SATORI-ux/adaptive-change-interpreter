@@ -60,6 +60,29 @@ function createTimelineRepo() {
   return repoPath;
 }
 
+function createDeceptiveTitleRepo() {
+  const repoPath = fs.mkdtempSync(path.join(os.tmpdir(), "aci-feature-title-"));
+  runGit(repoPath, ["init", "--quiet"]);
+  runGit(repoPath, ["config", "core.autocrlf", "false"]);
+
+  writeFile(repoPath, "README.md", "# Deceptive Title Fixture\n");
+  commit(repoPath, "Create project baseline");
+
+  writeFile(
+    repoPath,
+    "api/orders.js",
+    [
+      "export function createOrder(order) {",
+      "  return { ok: true, order };",
+      "}",
+      "",
+    ].join("\n")
+  );
+  commit(repoPath, "Add dark mode checkout flow");
+
+  return repoPath;
+}
+
 function runCli(args) {
   return execFileSync(process.execPath, ["src/index.mjs", ...args], {
     cwd: repoRoot,
@@ -84,8 +107,35 @@ test("feature timeline ranks feature-like ranges above minor updates", () => {
   assert.equal(output.mode, "feature_timeline");
   assert.ok(output.candidateRanges.length > 0);
   assert.equal(output.candidateRanges[0].commit.subject, "Add checkout order flow");
+  assert.equal(output.candidateRanges[0].title, "Checkout Order Flow");
+  assert.ok(["medium", "high"].includes(output.candidateRanges[0].titleConfidence.level));
+  assert.ok(output.candidateRanges[0].titleConfidence.score >= 65);
+  assert.match(output.candidateRanges[0].titleConfidence.reasoning, /commit subject/i);
+  assert.match(output.candidateRanges[0].titleConfidence.reasoning, /corroborates/i);
   assert.ok(output.candidateRanges[0].themes.includes("frontend_behavior"));
   assert.ok(output.candidateRanges[0].themes.includes("backend_logic"));
+});
+
+test("feature timeline lowers title confidence when subject words are not corroborated", () => {
+  const repoPath = createDeceptiveTitleRepo();
+  const stdout = runCli([
+    "--repo",
+    repoPath,
+    "--mode",
+    "feature_timeline",
+    "--max-commits",
+    "10",
+    "--limit",
+    "1"
+  ]);
+  const output = JSON.parse(stdout);
+  const candidate = output.candidateRanges[0];
+
+  assert.equal(candidate.commit.subject, "Add dark mode checkout flow");
+  assert.equal(candidate.title, "Dark Mode Checkout Flow");
+  assert.equal(candidate.titleConfidence.level, "low");
+  assert.ok(candidate.titleConfidence.score < 75);
+  assert.match(candidate.titleConfidence.reasoning, /does not corroborate|partially corroborates/i);
 });
 
 test("feature timeline renders as markdown", () => {
@@ -103,5 +153,7 @@ test("feature timeline renders as markdown", () => {
 
   assert.match(stdout, /# Feature Timeline/);
   assert.match(stdout, /Candidate Ranges/);
+  assert.match(stdout, /Checkout Order Flow/);
+  assert.match(stdout, /Title confidence/);
   assert.match(stdout, /Add checkout order flow/);
 });

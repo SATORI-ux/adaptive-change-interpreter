@@ -195,7 +195,10 @@ function renderFeatureTimeline(output, level = 1) {
     const why = asArray(candidate.whyThisRange).join(" ");
     const files = asArray(candidate.changedFiles).slice(0, 6).map(code).join(", ");
     const subject = candidate.commit?.subject ? ` ${candidate.commit.subject}.` : "";
-    return `${candidate.label} (${candidate.confidence}, score ${candidate.score}) - ${code(candidate.range)}.${subject} ${candidate.readingReason} Themes: ${asArray(candidate.themes).join(", ")}. Files: ${files}. Why: ${why}`;
+    const titleConfidence = candidate.titleConfidence
+      ? ` Title confidence: ${candidate.titleConfidence.level} (${candidate.titleConfidence.score}/100). ${candidate.titleConfidence.reasoning}`
+      : "";
+    return `${candidate.title || candidate.label} - ${candidate.label} (${candidate.confidence}, score ${candidate.score}) - ${code(candidate.range)}.${subject}${titleConfidence} ${candidate.readingReason} Themes: ${asArray(candidate.themes).join(", ")}. Files: ${files}. Why: ${why}`;
   });
 
   return [

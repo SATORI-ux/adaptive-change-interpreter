@@ -176,7 +176,7 @@ export function detectRiskSignals(repoData, classifiedChangedFiles, classifiedTr
       category: "repo_hygiene",
       title: "Local artifact files are tracked in Git",
       whyItMatters:
-        "OS-generated junk files usually do not belong in version control and are a common sign of loose repo hygiene.",
+        "OS-generated junk files do not belong in version control and are a common sign of loose repo hygiene.",
       evidence: localArtifacts,
       whatToVerify: [
         "Confirm whether these files are currently tracked in Git.",

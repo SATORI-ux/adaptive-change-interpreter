@@ -91,7 +91,7 @@ function inferProjectIdentity(repoData) {
 
   if (readmeSummary) {
     return {
-      summary: `The README suggests this project is trying to do something specific rather than acting as a generic starter: ${readmeSummary}`,
+      summary: `The README frames the project around this purpose: ${readmeSummary}`,
       source: "readme"
     };
   }
@@ -99,7 +99,7 @@ function inferProjectIdentity(repoData) {
   const packageDescription = repoData.packageJson?.description?.trim();
   if (packageDescription) {
     return {
-      summary: `The package description suggests the repo has a defined purpose: ${packageDescription}.`,
+      summary: `The package metadata describes the project as: ${packageDescription}.`,
       source: "package_json"
     };
   }
@@ -107,7 +107,7 @@ function inferProjectIdentity(repoData) {
   if (sourceOfTruthDocs.length >= 3) {
     return {
       summary:
-        `The repository carries explicit product and review guidance in source-controlled docs such as ${selectRepresentativeProjectPaths(sourceOfTruthDocs, 3).join(", ")}, which suggests the project is trying to encode judgment standards directly into the repo.`,
+        `The strongest purpose signal is the tracked product and review guidance in ${selectRepresentativeProjectPaths(sourceOfTruthDocs, 3).join(", ")}.`,
       source: "source_of_truth_docs"
     };
   }
@@ -129,48 +129,48 @@ function detectSystems(repoData, classifiedTrackedFiles) {
   if (hasFrontendSurface) {
     const entryFiles = selectRepresentativeProjectPaths(evidence.frontendEntryFiles || [], 3);
     const entryLabel = entryFiles.length > 0
-      ? `A frontend application shell is present, with likely entry files such as ${entryFiles.join(", ")}.`
-      : "A frontend application shell is present based on the tracked HTML and JavaScript files.";
+      ? `Frontend entry points are visible in ${entryFiles.join(", ")}.`
+      : "Tracked HTML and JavaScript files indicate a frontend surface.";
     systems.push(entryLabel);
   }
 
   if (getCategoryCount(counts, "styling") > 0) {
-    systems.push("A dedicated visual layer is visible through tracked styling files, which is a good sign that behavior and presentation are not completely collapsed together.");
+    systems.push("Styling files are separated from core behavior files, making visual changes easier to inspect apart from interaction logic.");
   }
 
   if (hasAnalysisEngine) {
     systems.push(
-      `An interpretation pipeline is present through files such as ${selectRepresentativeProjectPaths(evidence.analysisEngineFiles || findFilesByCategory(classifiedTrackedFiles, "analysis_engine"), 4).join(", ")}, which suggests the repository's main product behavior lives in analysis and explanation logic rather than a user-facing app shell.`
+      `The interpretation pipeline is concentrated in ${selectRepresentativeProjectPaths(evidence.analysisEngineFiles || findFilesByCategory(classifiedTrackedFiles, "analysis_engine"), 4).join(", ")}.`
     );
   }
 
   if (evidence.backendFiles?.length > 0) {
-    systems.push(`Backend support is present through files such as ${selectRepresentativeProjectPaths(evidence.backendFiles, 3).join(", ")}, which means some important behavior likely lives beyond the browser layer.`);
+    systems.push(`Backend behavior appears in ${selectRepresentativeProjectPaths(evidence.backendFiles, 3).join(", ")}, so review should include server-side enforcement, not only browser behavior.`);
   }
 
   if (evidence.databaseFiles?.length > 0) {
-    systems.push(`Database or persistence concerns are visible through ${evidence.databaseFiles.length} tracked database-oriented file(s), so data-shape assumptions matter alongside UI behavior.`);
+    systems.push(`${evidence.databaseFiles.length} database-oriented file(s) make data-shape assumptions part of the project review.`);
   }
 
   if (evidence.serviceWorkerFiles?.length > 0) {
-    systems.push(`Background or notification behavior is present through ${selectRepresentativeProjectPaths(evidence.serviceWorkerFiles, 2).join(", ")}, which adds another execution surface beyond the main page lifecycle.`);
+    systems.push(`Background behavior is owned by ${selectRepresentativeProjectPaths(evidence.serviceWorkerFiles, 2).join(", ")}, adding an execution path outside the main page lifecycle.`);
   }
 
   const scripts = evidence.packageScripts || {};
   if (hasScript(scripts, "build") || hasScript(scripts, "dev") || hasScript(scripts, "preview")) {
     const scriptNames = getScriptNames(scripts).slice(0, 6).join(", ");
-    systems.push(`The build and workflow layer is explicit in package scripts such as ${scriptNames}, which makes environment and deployment ownership easier to inspect.`);
+    systems.push(`Package scripts expose the main workflow commands: ${scriptNames}.`);
   }
 
   if (evidence.sourceOfTruthDocFiles?.length > 0) {
     systems.push(
-      `Docs-as-source-of-truth are visible through files such as ${selectRepresentativeProjectPaths(evidence.sourceOfTruthDocFiles, 4).join(", ")}, which means product intent and evaluation criteria are part of the system, not just side documentation.`
+      `Product and evaluation guidance is tracked in ${selectRepresentativeProjectPaths(evidence.sourceOfTruthDocFiles, 4).join(", ")}.`
     );
   }
 
   if (evidence.pipelineSupportFiles?.length > 0) {
     systems.push(
-      `Validation and fixture artifacts such as ${selectRepresentativeProjectPaths(evidence.pipelineSupportFiles, 3).join(", ")} indicate the analysis pipeline already has supporting assets around schema and sample output.`
+      `Schemas and examples in ${selectRepresentativeProjectPaths(evidence.pipelineSupportFiles, 3).join(", ")} give the analysis output a checkable contract.`
     );
   }
 
@@ -227,13 +227,13 @@ function buildProjectSummary(repoData, classifiedTrackedFiles) {
   const identity = inferProjectIdentity(repoData);
   const systems = detectSystems(repoData, classifiedTrackedFiles);
   const stage = inferProjectStage(repoData, classifiedTrackedFiles, []);
-
-  let summary =
-    `${identity.summary} ` +
-    `This repository currently contains ${repoData.trackedFiles.length} tracked file(s), with the strongest visible implementation areas being ${categorySummary || "no strong file-category pattern detected yet"}.`;
+  const paragraphs = [
+    identity.summary,
+    `Tracked shape: ${repoData.trackedFiles.length} file(s), with the strongest visible areas being ${categorySummary || "no strong file-category pattern detected yet"}.`
+  ];
 
   if (systems.length > 0) {
-    summary += ` The current repo evidence points to these main systems: ${systems.join(" ")}`;
+    paragraphs.push(`Main systems: ${systems.join(" ")}`);
   }
 
   const boundarySignals = [];
@@ -252,14 +252,14 @@ function buildProjectSummary(repoData, classifiedTrackedFiles) {
   }
 
   if (boundarySignals.length > 0) {
-    summary += ` The main complexity appears to be accumulating at the boundaries between ${boundarySignals.join(", ")}.`;
+    paragraphs.push(`Complexity to watch: ${boundarySignals.join(", ")}.`);
   }
 
   if (stage?.label) {
-    summary += ` The current posture reads more like a "${stage.label}" project than a greenfield experiment.`;
+    paragraphs.push(`Current posture: ${stage.label}. ${stage.reasoning}`);
   }
 
-  return summary;
+  return paragraphs.join("\n\n");
 }
 
 function buildWhatIsWorkingWell(repoData, classifiedTrackedFiles, riskSignals) {
@@ -271,22 +271,22 @@ function buildWhatIsWorkingWell(repoData, classifiedTrackedFiles, riskSignals) {
 
   if (readmeSummary) {
     strengths.push({
-      title: "The repository documents product intent in plain language",
+      title: "The project purpose is explicit",
       whyItMatters:
-        "A readable README gives the project a stable source of truth for what it is trying to do, which lowers the chance of feature drift during AI-assisted iteration."
+        "The README states the tool's role directly, which gives future changes a concrete target to preserve instead of relying on inferred intent."
     });
   }
 
   if (repoData.packageJson) {
     const scriptNames = getScriptNames(scripts);
     const workflowDescription = scriptNames.length > 0
-      ? ` Scripts such as ${scriptNames.slice(0, 5).join(", ")} make the workflow inspectable.`
+      ? ` Current scripts: ${scriptNames.slice(0, 5).join(", ")}.`
       : "";
 
     strengths.push({
-      title: "Project metadata is structured enough to inspect package-level behavior",
+      title: "Tooling entry points are easy to find",
       whyItMatters:
-        `A readable package.json makes build and tooling review easier and gives the project a clearer source of truth.${workflowDescription}`
+        `Package metadata exposes how to run, test, and validate the project without searching through implementation files.${workflowDescription}`
     });
   }
 
@@ -327,7 +327,7 @@ function buildWhatIsWorkingWell(repoData, classifiedTrackedFiles, riskSignals) {
     strengths.push({
       title: ".gitignore is present and reviewable",
       whyItMatters:
-        "That does not guarantee perfect hygiene, but it gives the project a place where artifact and secret-handling rules can be made explicit."
+        "Ignore rules are visible in the repo, so artifact and secret-handling expectations can be checked instead of guessed."
     });
   }
 
@@ -335,7 +335,7 @@ function buildWhatIsWorkingWell(repoData, classifiedTrackedFiles, riskSignals) {
     strengths.push({
       title: "No major heuristic risk signals were detected in this pass",
       whyItMatters:
-        "That does not prove the repo is perfect, but it suggests there are no obvious high-signal hygiene or structure warnings from the current rules."
+        "The current rules did not find obvious hygiene, boundary, or drift pressure points. Runtime behavior and deeper architecture still need separate verification."
     });
   }
 
@@ -361,7 +361,7 @@ function buildArtifactsAndDrift(repoData, classifiedTrackedFiles, riskSignals) {
     driftItems.push({
       title: "Local artifact files are present in tracked files",
       impact:
-        "This suggests some hygiene rules may have been tightened after work was already in motion, which is common, but it also means residue can stay around unless cleanup is deliberate.",
+        "Hygiene rules may have been tightened after work was already in motion. That is common, but residue can stay around unless cleanup is deliberate.",
       evidence: localArtifacts
     });
   }
@@ -425,7 +425,7 @@ function buildImprovementPriorities(repoData, riskSignals, classifiedTrackedFile
       priority: "high",
       title: "Resolve the strongest hygiene or exposure risks first",
       whyNow:
-        "High-severity issues undermine trust in the rest of the project and are usually cheaper to address before more feature work depends on them.",
+        "High-severity issues undermine trust in the rest of the project and are cheaper to address before more feature work depends on them.",
       actions: uniq(highSeveritySignals.flatMap((signal) => signal.whatToVerify || [])).slice(0, 6)
     });
   }

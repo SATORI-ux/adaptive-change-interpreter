@@ -301,7 +301,7 @@ function detectIntentSignals(repoData, classifiedChangedFiles) {
       id: "dark_mode",
       label: "dark-mode or theme-system work",
       description:
-        "The commit messages and changed files both suggest a theming-focused change, which usually means the goal is to alter the feel of the interface across multiple surfaces rather than tweak one isolated style rule.",
+        "The commit messages and changed files point to theme-system work across more than one interface surface.",
       patterns: ["dark mode", "theme", "palette", "accent", "color-scheme", "--bg", "--surface"]
     },
     {
@@ -315,7 +315,7 @@ function detectIntentSignals(repoData, classifiedChangedFiles) {
       id: "toggle_or_control",
       label: "new UI controls or toggles",
       description:
-        "The range appears to introduce or refine a user control, which usually means there is both visible UI work and state-handling logic behind it.",
+        "The range introduces or refines a user control, so review both the visible UI and the state-handling path behind it.",
       patterns: ["toggle", "button", "switch", "aria-", "checkbox", "theme-toggle"]
     },
     {
@@ -329,14 +329,14 @@ function detectIntentSignals(repoData, classifiedChangedFiles) {
       id: "copy_or_messaging",
       label: "product copy or messaging refinement",
       description:
-        "The range appears to adjust wording or framing, which can matter more than it seems in product-led interfaces because labels, titles, and descriptions often shape the feature’s meaning.",
+        "The range adjusts wording or framing. In product-led interfaces, labels and descriptions often carry feature meaning, not just decoration.",
       patterns: ["title", "label", "copy", "headline", "subtitle", "placeholder"]
     },
     {
       id: "background_behavior",
       label: "background or notification behavior",
       description:
-        "The changed evidence suggests browser behavior beyond the main page lifecycle, which adds another layer of execution and usually deserves extra verification.",
+        "The changed evidence includes browser behavior outside the main page lifecycle, adding another execution path to verify.",
       patterns: ["service-worker", "notification", "push", "clients.openwindow", "self.addEventListener"]
     }
   ];
@@ -387,7 +387,7 @@ function detectIntentSignals(repoData, classifiedChangedFiles) {
       id: "ui_surface",
       label: "UI-facing refinement work",
       description:
-        "The changed surface spans behavior and presentation, which usually means the feature is being shaped at the user-experience level rather than only through internal plumbing.",
+        "The changed surface spans behavior and presentation, so the user experience changed alongside the internal wiring.",
       score: 1
     });
   }
@@ -478,16 +478,16 @@ function buildWhyItMatters(repoData, classifiedChangedFiles, themes, depthProfil
     }
 
     return depthProfile.includeBoundaryContext && changedAreas.length > 1
-      ? `${topSignal.description} The main reason to care is that the change crosses ${changedAreas.join(", ")}, so the feature story matters more than any one isolated diff hunk.`
+      ? `${topSignal.description} The change crosses ${changedAreas.join(", ")}, so review the feature story before getting lost in isolated diff hunks.`
       : topSignal.description;
   }
 
   if (themes.includes("frontend_behavior") && themes.includes("visual_design")) {
     if (readmeSummary) {
-      return `The main impact is user-facing. Because the repository description suggests a specific product experience, changes across behavior and presentation are likely to affect how that experience actually feels, not just how it looks.`;
+      return "The main impact is user-facing. Behavior and presentation changed together, so review the experience as a flow rather than separating visual polish from interaction logic.";
     }
 
-    return "The main impact is user-facing. The behavior and presentation layers appear to have changed together, which usually means the user experience was adjusted rather than only the internal plumbing.";
+    return "The main impact is user-facing. Behavior and presentation changed together, so the review should focus on the experience the user now moves through.";
   }
 
   if (themes.includes("backend_logic") && themes.includes("frontend_behavior")) {
@@ -503,7 +503,7 @@ function buildWhyItMatters(repoData, classifiedChangedFiles, themes, depthProfil
   }
 
   if ((counts.docs || 0) > 0 && repoData.changedFiles.length === counts.docs) {
-    return "This range appears documentation-heavy, which often means the intent of the project or feature is being clarified rather than the runtime behavior changing directly.";
+    return "This range is documentation-heavy. Treat it as intent or operating-context work unless a runtime file also changes.";
   }
 
   const changedPathSummary = describeRepresentativePaths(repoData.changedFiles);
@@ -531,25 +531,25 @@ function buildCodeShapeExplanation(repoData, classifiedChangedFiles, themes, dep
       ? " A useful mental model is to treat the JavaScript files as behavior owners and the stylesheet as the place where that behavior gets made coherent across the interface."
       : "";
 
-    return `The code shape suggests a feature implemented across app behavior and presentation. In practical terms, that usually means one or two files own the interaction logic while styling files absorb the visual refinement. Files in this range such as ${changedPaths.join(", ") || diffPaths.join(", ") || "the changed frontend files"} fit that pattern.${intentSentence}${depthSentence}`;
+    return `The code shape is split between app behavior and presentation. Files such as ${changedPaths.join(", ") || diffPaths.join(", ") || "the changed frontend files"} carry the implementation path, while styling expresses the resulting state to the user.${intentSentence}${depthSentence}`;
   }
 
   if (hasFrontend && hasBackend) {
     return depthProfile.includeBoundaryContext
-      ? "The code shape suggests the change crosses a system boundary. That usually means the frontend is coordinating with backend behavior instead of acting as a self-contained interface-only change, so understanding the flow matters more than reading files in isolation. A good review should follow the request or state transition from UI trigger to backend enforcement and then back to the visible result."
-      : "The code shape suggests the change crosses a system boundary. That usually means the frontend is coordinating with backend behavior instead of acting as a self-contained interface-only change, so understanding the flow matters more than reading files in isolation.";
+      ? "The code shape crosses a system boundary. Follow the request or state transition from UI trigger to backend enforcement, then back to the visible result."
+      : "The code shape crosses a system boundary. Read the frontend and backend files as one flow, not as isolated edits.";
   }
 
   if (hasBackground) {
-    return "The code shape suggests the change affects both visible app flow and background behavior. That often raises subtle routing or state-consistency questions because the browser page is no longer the only execution surface involved.";
+    return "The code shape spans visible app flow and background behavior. That makes route ownership and state consistency more important than a page-only review.";
   }
 
   if (hasConfig) {
-    return "The code shape suggests some of the change lives in configuration or setup layers. That often means the visible behavior is influenced by environment or build rules rather than only by feature code.";
+    return "Part of the change lives in configuration or setup layers. Review environment and build assumptions alongside the feature code.";
   }
 
   if (themes.includes("implementation_logic")) {
-    return "The code shape suggests a focused implementation change where ownership is visible in source files, but the product intent is less explicit than in a named frontend, backend, or documentation change. Review the changed code path first, then use surrounding tests or callers to determine what behavior it actually supports.";
+    return "The code shape is a focused implementation change with less explicit product framing than a named frontend, backend, or docs change. Start with the changed code path, then use callers or tests to identify the behavior it supports.";
   }
 
   const evidencePaths = changedPaths.length > 0 ? changedPaths : diffPaths;
@@ -585,16 +585,16 @@ function buildReadingOrder(classifiedChangedFiles, repoData, intentSignals, dept
       reason = "Entry document. Best first file for seeing where the changed experience becomes visible.";
     } else if (lower.endsWith(".html")) {
       priority = 95;
-      reason = "Alternate document surface. Useful for seeing how the feature appears in a secondary page or route.";
+      reason = "Alternate document surface. Read this to compare secondary page or route behavior against the main entry.";
     } else if (entryFiles.includes(file.path) || lower.includes("app.") || lower.includes("/app.")) {
       priority = 98;
-      reason = "Entry coordinator. Useful for tracing how the visible experience is wired and coordinated in code.";
+      reason = "Entry coordinator. Read this to trace how the visible experience is wired in code.";
     } else if (preferredSourcePaths.has(file.path) && (lower.includes("app.") || lower.includes("/app."))) {
       priority = 96;
       reason = "Main orchestration file. Useful for tracing how the feature state or flow gets coordinated after entry.";
     } else if (preferredSourcePaths.has(file.path) && (lower.includes("private") || lower.includes("kept"))) {
       priority = 94;
-      reason = "Alternate or gated-flow file. Useful for understanding where this feature diverges from the default path.";
+      reason = "Alternate or gated-flow file. Read this to see where behavior diverges from the default path.";
     } else if (preferredSourcePaths.has(file.path)) {
       priority = 97;
       reason = "Representative source file from the selected range. A strong starting point for understanding the main implementation path.";
@@ -605,31 +605,31 @@ function buildReadingOrder(classifiedChangedFiles, repoData, intentSignals, dept
         : "Project framing file. Useful for understanding what the change is trying to support before reading implementation details.";
     } else if (wantsThemeContext && lower.includes("theme")) {
       priority = 93;
-      reason = "Theme or control file. Useful for understanding how the new UI state is represented and applied.";
+      reason = "Theme or control file. Read this to see how UI state is represented and applied.";
     } else if (lower.includes("app.") || lower.includes("/app.")) {
       priority = 92;
-      reason = "Likely orchestration file. Useful for seeing how the changed behavior is wired together.";
+      reason = "Likely orchestration file. Read this to see how the changed behavior is wired together.";
     } else if (file.category === "frontend_app") {
       priority = 85;
-      reason = "Behavior file. Useful for understanding feature logic and user flow.";
+      reason = "Behavior file. Read this for feature logic and user flow.";
     } else if (isGenericSourceCodePath(file.path)) {
       priority = 83;
-      reason = "Implementation file. Useful for understanding the main code path without assuming it belongs to a user-facing frontend surface.";
+      reason = "Implementation file. Read this for the main code path before assigning a broader product meaning.";
     } else if (file.category === "backend") {
       priority = 84;
-      reason = "Backend file. Useful for understanding enforcement logic, data handling, or cross-layer assumptions.";
+      reason = "Backend file. Read this for enforcement logic, data handling, or cross-layer assumptions.";
     } else if (file.category === "notifications_background") {
       priority = 80;
-      reason = "Background logic file. Useful for understanding route, notification, or off-page behavior.";
+      reason = "Background logic file. Read this for route, notification, or off-page behavior.";
     } else if (file.category === "styling") {
       priority = 70;
       reason = "Presentation file. Best read after you understand the behavior or structure it supports.";
     } else if (file.category === "config_build") {
       priority = 65;
-      reason = "Configuration file. Useful for environment or build understanding.";
+      reason = "Configuration file. Read this for environment or build assumptions.";
     } else if (file.category === "docs") {
       priority = 60;
-      reason = "Documentation file. Useful for context, but not always the first technical read.";
+      reason = "Documentation file. Read this for context after identifying the runtime surface.";
     }
 
     return {
@@ -660,7 +660,7 @@ function buildHowPiecesConnect(repoData, classifiedChangedFiles, themes, depthPr
   }
 
   if (themes.includes("backend_logic") && themes.includes("frontend_behavior")) {
-    connections.push("Frontend files likely depend on backend rules or responses, so the visible flow should be checked against the server-side truth.");
+    connections.push("Frontend files depend on backend rules or responses, so check the visible flow against server-side enforcement.");
   }
 
   if (themes.includes("notifications_background")) {
@@ -677,7 +677,7 @@ function buildHowPiecesConnect(repoData, classifiedChangedFiles, themes, depthPr
   }
 
   if (intentSignals.length > 1) {
-    connections.push(`Within that broader change, the strongest sub-themes appear to be ${intentSignals.map((signal) => signal.label).join(", ")}, which suggests a feature followed by real-world refinement rather than a single isolated edit.`);
+    connections.push(`Within that broader change, the strongest sub-themes are ${intentSignals.map((signal) => signal.label).join(", ")}, pointing to a feature plus follow-up refinement rather than a single isolated edit.`);
   }
 
   if (depthProfile.includeBoundaryContext && themes.includes("frontend_behavior") && themes.includes("visual_design")) {
@@ -702,7 +702,7 @@ function buildPatternTrend(themes, riskSignals, intentSignals, depthProfile) {
   }
 
   if (themes.includes("backend_logic") && themes.includes("frontend_behavior")) {
-    return "This looks like a boundary-crossing implementation pattern. These changes are usually more important to understand at the flow level than at the line-by-line level.";
+    return "This is a boundary-crossing implementation pattern. Understand the flow before reviewing individual lines.";
   }
 
   if (themes.includes("configuration_build")) {
@@ -714,7 +714,7 @@ function buildPatternTrend(themes, riskSignals, intentSignals, depthProfile) {
   }
 
   if (hasBoundaryRisk) {
-    return "The current range suggests a growing boundary-complexity pattern, where bugs are more likely to come from mismatched assumptions between layers than from isolated syntax mistakes.";
+    return "The current range carries a boundary-complexity pattern: bugs are more likely to come from mismatched layer assumptions than isolated syntax mistakes.";
   }
 
   return "No broad architectural trend is directly supported by the current evidence. Treat this as a localized change unless caller tracing, repeated file patterns, or risk signals show that the same concern is spreading.";
@@ -867,7 +867,7 @@ function buildCarryForwardLesson(themes, riskSignals = [], intentSignals = [], c
   }
 
   if (hasThemeSignal) {
-    return "Theme-oriented features rarely live in one place. The reusable lesson is to review both how the UI state is toggled and how that state is expressed across the interface, because visual consistency problems usually come from the gap between those two layers.";
+    return "Theme-oriented features rarely live in one place. The reusable lesson is to review both how the UI state is toggled and how that state is expressed across the interface, because visual consistency problems often come from the gap between those two layers.";
   }
 
   if (hasPrivateSignal || alternateHtml) {

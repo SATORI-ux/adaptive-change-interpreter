@@ -737,6 +737,20 @@ function assertProductContract(output, fixture) {
     for (const candidate of output.candidateRanges) {
       assertNonEmptyString(candidate.range, `${fixture.id} candidates need ranges.`);
       assertNonEmptyString(candidate.label, `${fixture.id} candidates need labels.`);
+      assertNonEmptyString(candidate.title, `${fixture.id} candidates need titles.`);
+      assert.ok(candidate.titleConfidence, `${fixture.id} candidates need title confidence.`);
+      assert.ok(
+        ["low", "medium", "high"].includes(candidate.titleConfidence.level),
+        `${fixture.id} title confidence needs a known level.`
+      );
+      assert.ok(
+        candidate.titleConfidence.score >= 0 && candidate.titleConfidence.score <= 100,
+        `${fixture.id} title confidence score should be 0-100.`
+      );
+      assertNonEmptyString(
+        candidate.titleConfidence.reasoning,
+        `${fixture.id} title confidence needs reasoning.`
+      );
       assertNonEmptyString(candidate.readingReason, `${fixture.id} candidates need reading reasons.`);
       assert.ok(
         Array.isArray(candidate.whyThisRange) && candidate.whyThisRange.length > 0,
@@ -852,7 +866,19 @@ function assertMarkdownCliOutput(repoPath, from, to, mode) {
 }
 
 function getValueAtPath(target, dottedPath) {
+  if (!dottedPath) {
+    return target;
+  }
+
   return dottedPath.split(".").reduce((value, key) => value?.[key], target);
+}
+
+function stringifyExpectationValue(value) {
+  if (Array.isArray(value) || (value && typeof value === "object")) {
+    return JSON.stringify(value, null, 2);
+  }
+
+  return String(value ?? "");
 }
 
 function assertExpectedIncludes(output, fixture) {
@@ -860,15 +886,30 @@ function assertExpectedIncludes(output, fixture) {
 
   for (const expectation of expectations) {
     const actualValue = getValueAtPath(output, expectation.path);
-    const haystack = Array.isArray(actualValue)
-      ? actualValue.join("\n")
-      : String(actualValue ?? "");
+    const haystack = stringifyExpectationValue(actualValue);
 
     for (const snippet of expectation.includes || []) {
       assert.match(
         haystack.toLowerCase(),
         new RegExp(snippet.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
         `${fixture.id} should include "${snippet}" at ${expectation.path}.`
+      );
+    }
+  }
+}
+
+function assertExpectedExcludes(output, fixture) {
+  const expectations = fixture.expectedExcludes || [];
+
+  for (const expectation of expectations) {
+    const actualValue = getValueAtPath(output, expectation.path);
+    const haystack = stringifyExpectationValue(actualValue);
+
+    for (const snippet of expectation.excludes || []) {
+      assert.doesNotMatch(
+        haystack.toLowerCase(),
+        new RegExp(snippet.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+        `${fixture.id} should not include "${snippet}" at ${expectation.path}.`
       );
     }
   }
@@ -917,6 +958,7 @@ for (const fixture of fixtures) {
     assertProductContract(parsed, fixture);
     assertQualityEvaluationPasses(parsed, fixture);
     assertExpectedIncludes(parsed, fixture);
+    assertExpectedExcludes(parsed, fixture);
 
     if (fixture.type === "live_commit_range") {
       assertLiveCommitRangeCoverage(parsed, fixture, liveRepoPath);

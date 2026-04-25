@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.mjs",
+    "gui": "node src/gui/server.mjs",
     "evaluate:output": "node src/evaluateOutputQuality.mjs",
     "validate:schema": "node src/validateSchema.mjs",
     "test": "node --test"

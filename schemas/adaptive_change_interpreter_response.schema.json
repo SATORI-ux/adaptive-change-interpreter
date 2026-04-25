@@ -299,6 +299,8 @@
         "range",
         "from",
         "to",
+        "title",
+        "titleConfidence",
         "commit",
         "label",
         "score",
@@ -314,6 +316,24 @@
         "range": { "type": "string" },
         "from": { "type": "string" },
         "to": { "type": "string" },
+        "title": { "type": "string" },
+        "titleConfidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["level", "score", "reasoning"],
+          "properties": {
+            "level": {
+              "type": "string",
+              "enum": ["low", "medium", "high"]
+            },
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "reasoning": { "type": "string" }
+          }
+        },
         "commit": {
           "type": "object",
           "additionalProperties": false,

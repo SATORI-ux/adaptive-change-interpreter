@@ -24,6 +24,9 @@ Highlight:
 - good modularization
 - strong product focus
 
+Avoid reusable praise that could apply to most repositories. Prefer concrete
+language about what the evidence enables, protects, or makes easier to verify.
+
 ### 3. Risk signals
 Focus on:
 - boundary issues
